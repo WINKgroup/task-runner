@@ -15,29 +15,53 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
         this.collection = options.collection
     }
 
-    getModel() {
+    protected getModel() {
         const db = Db.get(this.dbUri)
         return db.model<ITaskDoc, ITaskModel>(this.collection, schema)
     }
 
+    protected doc2persisted(doc: ITaskDoc) {
+        const task = doc.toObject() as ITaskPersisted
+        task.idTask = doc._id.toString()
+        return task
+    }
+    
     async erase(withS = true) {
         const db = Db.get(this.dbUri)
         await db.dropCollection(withS ? this.collection + 's' : this.collection)
     }
 
     async loadTasks(tasksToLoad:number) {
-        const topics = Object.keys(this.topicFactory)
         const Model = this.getModel()
-        let query = Model.find({topic: {$in: topics} }).sort('-priority')
+        const queryObj = this.loadTasksQueryObj()
+
+        let query = Model.find(queryObj).sort('-priority')
         if (tasksToLoad > 0) query = query.limit(tasksToLoad)
-        const tasks = await query.exec()
-        return tasks
+        const taskDocs = await query.exec()
+
+        return taskDocs.map( taskDoc => this.doc2persisted(taskDoc) )
     }
 
-    async upsertTask(taskPersisted: Partial<ITaskPersisted>) {
+    async saveTask(persistedTask:ITaskPersisted) {
         const Model = this.getModel()
-        const doc = new Model(taskPersisted)
-        await doc.save()
-        return doc
+        if (persistedTask.idTask) {
+            const doc = await Model.findByIdAndUpdate(persistedTask.idTask, persistedTask, {
+                returnDocument:'after',
+                overwrite: true,
+                upsert: true,
+                new: true
+            })
+            return this.doc2persisted(doc)
+        } else {
+            const doc = new Model(persistedTask)
+            await doc.save()
+            return this.doc2persisted(doc)
+        }
+    }
+
+    async deleteTasksMarked() {
+        const Model = this.getModel()
+        const now = (new Date()).toISOString()
+        await Model.deleteMany({ deleteAt: { $lt: now } })
     }
 }

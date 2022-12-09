@@ -14,6 +14,7 @@ export default abstract class Task extends EventEmitter {
     applicant?: string
     worker?: string
     createdAt: string
+    deleteAt?: string
     waitUntil?: string
     consoleLog = new ConsoleLog({prefix: 'Task'})
 
@@ -34,6 +35,7 @@ export default abstract class Task extends EventEmitter {
         this.applicant = options.applicant
         this.worker = options.worker
         this.createdAt = options.createdAt
+        this.deleteAt = options.deleteAt
         this.waitUntil = options.waitUntil
     }
 
@@ -67,6 +69,14 @@ export default abstract class Task extends EventEmitter {
         this.applicant = taskPersisted.applicant
         this.worker = taskPersisted.worker
         this.createdAt = taskPersisted.createdAt
+        this.deleteAt = taskPersisted.deleteAt
         this.waitUntil = taskPersisted.waitUntil
+    }
+
+    title() {
+        let title = this._topic
+        if (this._id) title += ` (${ this._id })`
+
+        return title
     }
 }

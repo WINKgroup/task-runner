@@ -1,4 +1,4 @@
-import { ITaskPersisted, TaskRunnerOptions } from "./common"
+import { ITaskPersisted, persistedTaskTitle, TaskRunnerOptions } from "./common"
 import _ from 'lodash'
 import ConsoleLog from "@winkgroup/console-log"
 import Task from "./task"
@@ -14,7 +14,8 @@ export default abstract class TaskRunnerAbstract {
     constructor(inputOptions?:Partial<TaskRunnerOptions>) {
         this.options = _.defaults(inputOptions, {
             maxRunningTasks: 5,
-            cronHz: 0
+            cronHz: 0,
+            instance: 'default'
         })
     }
 
@@ -26,9 +27,31 @@ export default abstract class TaskRunnerAbstract {
 
     get numOfRunningTasks() { return this._numOfRunningTasks }
 
-    protected abstract loadTasks(tasksToLoad:number): Promise<ITaskPersisted[]>
+    abstract loadTasks(tasksToLoad:number): Promise<ITaskPersisted[]>
+    abstract saveTask(persistedTask:ITaskPersisted): Promise<ITaskPersisted | null>
     abstract erase(): Promise<void>
-    abstract upsertTask(taskPersisted: ITaskPersisted): Promise<ITaskPersisted>
+
+    protected loadTasksQueryObj() {
+        const topics = Object.keys(this.topicFactory)
+        const now = (new Date()).toISOString()
+        const queryObj:{[key:string]: any} = { 
+            state: 'to do',
+            worker: {$exists: false},
+            $or: [
+                { waitUntil: {$exists: false} },
+                { waitUntil: {$lte: now} }
+            ]
+        }
+        
+        if (topics.indexOf('') !== -1) {
+            if(topics.length > 1) throw new Error('topic empty should be used alone')
+            queryObj['topic'] = {$exists: false}
+        } else {
+            queryObj['topic'] = {$in: topics}
+        }
+
+        return queryObj
+    }
 
     getFactory(topic?:string) {
         try {
@@ -52,9 +75,50 @@ export default abstract class TaskRunnerAbstract {
         return factory ? factory.unpersist(persistedTask) : null
     }
 
-    persistTask(task:Task) {
+    async persistTask(task:Task, save = true) {
         const factory = this.getFactory(task.topic)
-        return factory ? factory.persist(task) : null
+        if (!factory) throw new Error(`unable to save task ${ task.title() }`)
+        const persistedTask = factory.persist(task)
+        if (!save) return persistedTask
+        const result = await this.saveTask(persistedTask)
+        return result
+    }
+
+    async lockTask(persistedTask:ITaskPersisted) {
+        persistedTask.worker = this.options.instance
+        const result = await this.saveTask(persistedTask)
+        return !!result
+    }
+
+    protected async retrieveTasksAndLock(tasksToStart:number) {
+        const tasks = [] as Task[]
+        if (tasksToStart <= 0) return []
+        const persistedTasks = await this.loadTasks(tasksToStart)
+        for(const persistedTask of persistedTasks) {
+            const task = this.unpersistTask( persistedTask )
+            if (!task) continue
+            const locked = await this.lockTask(persistedTask)
+            if (!locked) {
+                this.consoleLog.debug(`unable to lock task ${ persistedTaskTitle(persistedTask) }`)
+                continue
+            } else this.consoleLog.debug(`task ${ persistedTaskTitle(persistedTask) } locked`)
+            tasks.push(task)
+        }
+
+        return tasks
+    }
+
+    protected runTask(task:Task) {
+        ++this._numOfRunningTasks
+        this.consoleLog.debug(`running task ${ task.title() }`)
+        task.addListener('ended', async () => {
+            --this._numOfRunningTasks
+            task.worker = undefined
+            this.consoleLog.debug(`unlocking task ${ task.title() }`)
+            const result = await this.persistTask(task)
+            if (!result) this.consoleLog.error(`unable to persist task ${ task.title() }`)
+        } )
+        return task.run()
     }
 
     async run() {
@@ -64,19 +128,7 @@ export default abstract class TaskRunnerAbstract {
         }
         const tasksToStart = this.options.maxRunningTasks - this._numOfRunningTasks
         this.consoleLog.debug(`running tasks ${ this._numOfRunningTasks }/${ this.options.maxRunningTasks }`)
-        if (tasksToStart > 0) {
-            const persistedTasks = await this.loadTasks(tasksToStart)
-            const tasks = persistedTasks.map(persistedTask => this.unpersistTask( persistedTask ) )
-            tasks.map( task => {
-                if (task) {
-                    ++this._numOfRunningTasks
-                    task.addListener('ended', () => {
-                        --this._numOfRunningTasks
-                        this.persistTask(task)
-                    } )
-                    task.run()
-                }
-            })
-        }
+        const tasks = await this.retrieveTasksAndLock(tasksToStart)
+        tasks.map( task => this.runTask(task) )
     }
 }

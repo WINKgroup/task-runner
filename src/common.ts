@@ -1,6 +1,7 @@
 export interface TaskRunnerOptions {
     maxRunningTasks:number
     cronHz:number
+    instance:string
 }
 
 export interface TaskRunnerMongoOptions extends TaskRunnerOptions {
@@ -18,7 +19,15 @@ export interface ITaskPersisted {
     worker?: string
     createdAt: string
     updatedAt: string
+    deleteAt?: string
     waitUntil?: string
+}
+
+export function persistedTaskTitle(persistedTask: ITaskPersisted) {
+    let title = persistedTask.topic ? persistedTask.topic : ''
+    title += ` (${ persistedTask.idTask })`
+
+    return title
 }
 
 export interface InputTask extends Omit<ITaskPersisted, 'idTask' | 'updatedAt' > {
