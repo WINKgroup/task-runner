@@ -1,4 +1,4 @@
-import { ITaskPersisted, persistedTaskTitle, TaskRunnerOptions } from "./common"
+import { ITaskPersisted, persistedTaskTitle, TaskRunnerFindTasksParams, TaskRunnerOptions } from "./common"
 import _ from 'lodash'
 import ConsoleLog from "@winkgroup/console-log"
 import Task from "./task"
@@ -34,6 +34,7 @@ export default abstract class TaskRunnerAbstract {
 
     get numOfRunningTasks() { return this._numOfRunningTasks }
 
+    abstract findTasks(params: Partial<TaskRunnerFindTasksParams>): Promise<ITaskPersisted[]>
     abstract loadTasks(tasksToLoad:number): Promise<ITaskPersisted[]>
     abstract saveTask(persistedTask:ITaskPersisted): Promise<ITaskPersisted | null>
     abstract erase(): Promise<void>

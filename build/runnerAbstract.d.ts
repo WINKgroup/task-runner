@@ -1,4 +1,4 @@
-import { ITaskPersisted, TaskRunnerOptions } from "./common";
+import { ITaskPersisted, TaskRunnerFindTasksParams, TaskRunnerOptions } from "./common";
 import ConsoleLog from "@winkgroup/console-log";
 import Task from "./task";
 import TaskFactory from "./factory";
@@ -17,6 +17,7 @@ export default abstract class TaskRunnerAbstract {
     get active(): boolean;
     set active(isActive: boolean);
     get numOfRunningTasks(): number;
+    abstract findTasks(params: Partial<TaskRunnerFindTasksParams>): Promise<ITaskPersisted[]>;
     abstract loadTasks(tasksToLoad: number): Promise<ITaskPersisted[]>;
     abstract saveTask(persistedTask: ITaskPersisted): Promise<ITaskPersisted | null>;
     abstract erase(): Promise<void>;

@@ -95,6 +95,36 @@ var TaskRunnerMongo = /** @class */ (function (_super) {
             });
         });
     };
+    TaskRunnerMongo.prototype.findTasks = function (inputParams) {
+        return __awaiter(this, void 0, void 0, function () {
+            var Model, params, query, taskDocs;
+            var _this = this;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        Model = this.getModel();
+                        params = lodash_1.default.defaults(inputParams, {
+                            queryObj: {},
+                            limit: 0,
+                            skip: 0,
+                            sort: ''
+                        });
+                        query = Model.find(params.queryObj);
+                        if (params.limit)
+                            query = query.limit(params.limit);
+                        if (params.skip)
+                            query = query.skip(params.skip);
+                        if (params.sort)
+                            query = query.sort(params.sort);
+                        return [4 /*yield*/, query.exec()];
+                    case 1:
+                        taskDocs = _a.sent();
+                        this.consoleLog.debug("".concat(taskDocs.length, " tasks found"));
+                        return [2 /*return*/, taskDocs.map(function (taskDoc) { return _this.doc2persisted(taskDoc); })];
+                }
+            });
+        });
+    };
     TaskRunnerMongo.prototype.loadTasks = function (tasksToLoad) {
         return __awaiter(this, void 0, void 0, function () {
             var Model, queryObj, query, taskDocs;

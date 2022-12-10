@@ -25,3 +25,9 @@ export interface InputTask extends Omit<ITaskPersisted, 'idTask' | 'updatedAt'> 
     id?: any;
 }
 export type TaskSignal = 'pause' | 'stop' | 'resume';
+export interface TaskRunnerFindTasksParams {
+    queryObj: object;
+    limit: number;
+    skip: number;
+    sort: string;
+}

@@ -1,6 +1,6 @@
 import Db from "@winkgroup/db-mongo"
 import _ from "lodash"
-import { ITaskPersisted, persistedTaskTitle, TaskRunnerMongoOptions } from "./common"
+import { ITaskPersisted, persistedTaskTitle, TaskRunnerFindTasksParams, TaskRunnerMongoOptions } from "./common"
 import { ITaskDoc, ITaskModel, schema } from "./modelTaskPersisted"
 import TaskRunnerAbstract from "./runnerAbstract"
 
@@ -8,7 +8,7 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
     dbUri:string
     collection:string
 
-    constructor(dbUri:string, inputOptions?:TaskRunnerMongoOptions) {
+    constructor(dbUri:string, inputOptions?:Partial<TaskRunnerMongoOptions>) {
         const options = _.defaults(inputOptions, { collection: 'task' })
         super(options)
         this.dbUri = dbUri
@@ -30,6 +30,24 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
         const db = Db.get(this.dbUri)
         await db.dropCollection(withS ? this.collection + 's' : this.collection)
         this.consoleLog.print('tasks erased')
+    }
+
+    async findTasks(inputParams: Partial<TaskRunnerFindTasksParams>) {
+        const Model = this.getModel()
+        const params:TaskRunnerFindTasksParams = _.defaults(inputParams, {
+            queryObj: {},
+            limit: 0,
+            skip: 0,
+            sort: ''
+        })
+
+        let query = Model.find(params.queryObj)
+        if (params.limit) query = query.limit(params.limit)
+        if (params.skip) query = query.skip(params.skip)
+        if (params.sort) query = query.sort(params.sort)
+        const taskDocs = await query.exec()
+        this.consoleLog.debug(`${ taskDocs.length } tasks found`)
+        return taskDocs.map( taskDoc => this.doc2persisted(taskDoc) )
     }
 
     async loadTasks(tasksToLoad:number) {
