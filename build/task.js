@@ -57,6 +57,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var console_log_1 = __importDefault(require("@winkgroup/console-log"));
 var lodash_1 = __importDefault(require("lodash"));
 var node_events_1 = require("node:events");
+var cron_1 = __importDefault(require("@winkgroup/cron"));
 var Task = /** @class */ (function (_super) {
     __extends(Task, _super);
     function Task(inputOptions) {
@@ -79,6 +80,7 @@ var Task = /** @class */ (function (_super) {
         _this.applicant = options.applicant;
         _this.worker = options.worker;
         _this.createdAt = options.createdAt;
+        _this.deleteAt = options.deleteAt;
         _this.waitUntil = options.waitUntil;
         return _this;
     }
@@ -138,7 +140,19 @@ var Task = /** @class */ (function (_super) {
         this.applicant = taskPersisted.applicant;
         this.worker = taskPersisted.worker;
         this.createdAt = taskPersisted.createdAt;
+        this.deleteAt = taskPersisted.deleteAt;
         this.waitUntil = taskPersisted.waitUntil;
+    };
+    Task.prototype.title = function () {
+        var title = this._topic;
+        if (this._id)
+            title += " (".concat(this._id, ")");
+        return title;
+    };
+    Task.prototype.setCompleted = function (millisecondsForDeletion) {
+        if (millisecondsForDeletion === void 0) { millisecondsForDeletion = 30000; }
+        this._state = 'completed';
+        this.deleteAt = cron_1.default.comeBackIn(millisecondsForDeletion);
     };
     return Task;
 }(node_events_1.EventEmitter));

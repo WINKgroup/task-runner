@@ -13,6 +13,7 @@ export default abstract class Task extends EventEmitter {
     applicant?: string;
     worker?: string;
     createdAt: string;
+    deleteAt?: string;
     waitUntil?: string;
     consoleLog: ConsoleLog;
     constructor(inputOptions?: InputTask);
@@ -24,4 +25,6 @@ export default abstract class Task extends EventEmitter {
     protected abstract _run(): Promise<void>;
     run(): Promise<void>;
     unpersistHelper(taskPersisted: ITaskPersisted): void;
+    title(): string;
+    setCompleted(millisecondsForDeletion?: number): void;
 }

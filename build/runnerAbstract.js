@@ -39,18 +39,24 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+var common_1 = require("./common");
 var lodash_1 = __importDefault(require("lodash"));
 var console_log_1 = __importDefault(require("@winkgroup/console-log"));
+var cron_1 = __importDefault(require("@winkgroup/cron"));
 var TaskRunnerAbstract = /** @class */ (function () {
     function TaskRunnerAbstract(inputOptions) {
         this.consoleLog = new console_log_1.default({ prefix: 'Task Runner' });
         this.isActive = true;
         this._numOfRunningTasks = 0;
         this.topicFactory = {};
-        this.options = lodash_1.default.defaults(inputOptions, {
+        var options = lodash_1.default.defaults(inputOptions, {
             maxRunningTasks: 5,
-            cronHz: 0
+            cronHz: 0,
+            instance: 'default'
         });
+        this.maxRunningTasks = options.maxRunningTasks;
+        this.instance = options.instance;
+        this.cronObj = new cron_1.default(options.cronHz, this.consoleLog);
     }
     Object.defineProperty(TaskRunnerAbstract.prototype, "active", {
         get: function () { return this.isActive; },
@@ -67,6 +73,27 @@ var TaskRunnerAbstract = /** @class */ (function () {
         enumerable: false,
         configurable: true
     });
+    TaskRunnerAbstract.prototype.loadTasksQueryObj = function () {
+        var topics = Object.keys(this.topicFactory);
+        var now = (new Date()).toISOString();
+        var queryObj = {
+            state: 'to do',
+            worker: { $exists: false },
+            $or: [
+                { waitUntil: { $exists: false } },
+                { waitUntil: { $lte: now } }
+            ]
+        };
+        if (topics.indexOf('') !== -1) {
+            if (topics.length > 1)
+                throw new Error('topic empty should be used alone');
+            queryObj['topic'] = { $exists: false };
+        }
+        else {
+            queryObj['topic'] = { $in: topics };
+        }
+        return queryObj;
+    };
     TaskRunnerAbstract.prototype.getFactory = function (topic) {
         try {
             if (!topic) {
@@ -91,13 +118,107 @@ var TaskRunnerAbstract = /** @class */ (function () {
         var factory = this.getFactory(persistedTask.topic);
         return factory ? factory.unpersist(persistedTask) : null;
     };
-    TaskRunnerAbstract.prototype.persistTask = function (task) {
-        var factory = this.getFactory(task.topic);
-        return factory ? factory.persist(task) : null;
+    TaskRunnerAbstract.prototype.persistTask = function (task, save) {
+        if (save === void 0) { save = true; }
+        return __awaiter(this, void 0, void 0, function () {
+            var factory, persistedTask, result;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        factory = this.getFactory(task.topic);
+                        if (!factory)
+                            throw new Error("unable to save task ".concat(task.title()));
+                        persistedTask = factory.persist(task);
+                        if (!save)
+                            return [2 /*return*/, persistedTask];
+                        return [4 /*yield*/, this.saveTask(persistedTask)];
+                    case 1:
+                        result = _a.sent();
+                        return [2 /*return*/, result];
+                }
+            });
+        });
+    };
+    TaskRunnerAbstract.prototype.lockTask = function (persistedTask) {
+        return __awaiter(this, void 0, void 0, function () {
+            var result;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        persistedTask.worker = this.instance;
+                        return [4 /*yield*/, this.saveTask(persistedTask)];
+                    case 1:
+                        result = _a.sent();
+                        return [2 /*return*/, !!result];
+                }
+            });
+        });
+    };
+    TaskRunnerAbstract.prototype.retrieveTasksAndLock = function (tasksToStart) {
+        return __awaiter(this, void 0, void 0, function () {
+            var tasks, persistedTasks, _i, persistedTasks_1, persistedTask, task, locked;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        tasks = [];
+                        if (tasksToStart <= 0)
+                            return [2 /*return*/, []];
+                        return [4 /*yield*/, this.loadTasks(tasksToStart)];
+                    case 1:
+                        persistedTasks = _a.sent();
+                        _i = 0, persistedTasks_1 = persistedTasks;
+                        _a.label = 2;
+                    case 2:
+                        if (!(_i < persistedTasks_1.length)) return [3 /*break*/, 5];
+                        persistedTask = persistedTasks_1[_i];
+                        task = this.unpersistTask(persistedTask);
+                        if (!task)
+                            return [3 /*break*/, 4];
+                        return [4 /*yield*/, this.lockTask(persistedTask)];
+                    case 3:
+                        locked = _a.sent();
+                        if (!locked) {
+                            this.consoleLog.debug("unable to lock task ".concat((0, common_1.persistedTaskTitle)(persistedTask)));
+                            return [3 /*break*/, 4];
+                        }
+                        else
+                            this.consoleLog.debug("task ".concat((0, common_1.persistedTaskTitle)(persistedTask), " locked"));
+                        tasks.push(task);
+                        _a.label = 4;
+                    case 4:
+                        _i++;
+                        return [3 /*break*/, 2];
+                    case 5: return [2 /*return*/, tasks];
+                }
+            });
+        });
+    };
+    TaskRunnerAbstract.prototype.runTask = function (task) {
+        var _this = this;
+        ++this._numOfRunningTasks;
+        this.consoleLog.debug("running task ".concat(task.title()));
+        task.addListener('ended', function () { return __awaiter(_this, void 0, void 0, function () {
+            var result;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        --this._numOfRunningTasks;
+                        task.worker = undefined;
+                        this.consoleLog.debug("unlocking task ".concat(task.title()));
+                        return [4 /*yield*/, this.persistTask(task)];
+                    case 1:
+                        result = _a.sent();
+                        if (!result)
+                            this.consoleLog.error("unable to persist task ".concat(task.title()));
+                        return [2 /*return*/];
+                }
+            });
+        }); });
+        return task.run();
     };
     TaskRunnerAbstract.prototype.run = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var tasksToStart, persistedTasks, tasks;
+            var numOfFactories, tasksToStart, tasks;
             var _this = this;
             return __generator(this, function (_a) {
                 switch (_a.label) {
@@ -106,25 +227,35 @@ var TaskRunnerAbstract = /** @class */ (function () {
                             this.consoleLog.debug('not active, run aborted');
                             return [2 /*return*/];
                         }
-                        tasksToStart = this.options.maxRunningTasks - this._numOfRunningTasks;
-                        this.consoleLog.debug("running tasks ".concat(this._numOfRunningTasks, "/").concat(this.options.maxRunningTasks));
-                        if (!(tasksToStart > 0)) return [3 /*break*/, 2];
-                        return [4 /*yield*/, this.loadTasks(tasksToStart)];
+                        numOfFactories = Object.values(this.topicFactory).length;
+                        if (numOfFactories === 0)
+                            this.consoleLog.warn('no factory registered, likely no task will be run');
+                        tasksToStart = this.maxRunningTasks - this._numOfRunningTasks;
+                        this.consoleLog.debug("running tasks ".concat(this._numOfRunningTasks, "/").concat(this.maxRunningTasks));
+                        return [4 /*yield*/, this.retrieveTasksAndLock(tasksToStart)];
                     case 1:
-                        persistedTasks = _a.sent();
-                        tasks = persistedTasks.map(function (persistedTask) { return _this.unpersistTask(persistedTask); });
-                        tasks.map(function (task) {
-                            if (task) {
-                                ++_this._numOfRunningTasks;
-                                task.addListener('ended', function () {
-                                    --_this._numOfRunningTasks;
-                                    _this.persistTask(task);
-                                });
-                                task.run();
-                            }
-                        });
-                        _a.label = 2;
-                    case 2: return [2 /*return*/];
+                        tasks = _a.sent();
+                        tasks.map(function (task) { return _this.runTask(task); });
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    TaskRunnerAbstract.prototype.cron = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!this.cronObj.tryStartRun())
+                            return [2 /*return*/];
+                        return [4 /*yield*/, this.run()];
+                    case 1:
+                        _a.sent();
+                        return [4 /*yield*/, this.deleteTasksMarked()];
+                    case 2:
+                        _a.sent();
+                        this.cronObj.runCompleted();
+                        return [2 /*return*/];
                 }
             });
         });

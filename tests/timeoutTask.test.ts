@@ -21,7 +21,7 @@ test('a task should be added', async () => {
     const Model = r.getModel()
     const timeoutFactory = new TimeoutTaskFactory()
     const persistedTask = timeoutFactory.persist( new TimeoutTask() )
-    await r.upsertTask(persistedTask)
+    await r.saveTask(persistedTask)
     const count = await Model.countDocuments()
     expect(count).toBe(1)
 })

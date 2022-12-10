@@ -18,7 +18,19 @@ export default abstract class TaskFactory {
         if (task.priority) taskPersisted.priority = task.priority
         if (task.applicant) taskPersisted.applicant = task.applicant
         if (task.worker) taskPersisted.worker = task.worker
+        if (task.deleteAt) taskPersisted.deleteAt = task.deleteAt
         if (task.waitUntil) taskPersisted.waitUntil = task.waitUntil
+
+        return taskPersisted
+    }
+
+    static emptyTaskPersisted() {
+        const taskPersisted:ITaskPersisted = {
+            idTask: undefined,
+            state: 'to do',
+            createdAt: (new Date()).toISOString(),
+            updatedAt: (new Date()).toISOString()
+        }
 
         return taskPersisted
     }

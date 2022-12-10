@@ -3,20 +3,27 @@ import _ from 'lodash'
 import ConsoleLog from "@winkgroup/console-log"
 import Task from "./task"
 import TaskFactory from "./factory"
+import Cron from "@winkgroup/cron"
 
 export default abstract class TaskRunnerAbstract {
-    options:TaskRunnerOptions
     consoleLog = new ConsoleLog({prefix: 'Task Runner'})
     protected isActive = true
     protected _numOfRunningTasks = 0
     topicFactory = {} as {[topic:string]: TaskFactory}
+    maxRunningTasks: number
+    instance: string
+    cronObj:Cron
 
     constructor(inputOptions?:Partial<TaskRunnerOptions>) {
-        this.options = _.defaults(inputOptions, {
+        const options = _.defaults(inputOptions, {
             maxRunningTasks: 5,
             cronHz: 0,
             instance: 'default'
         })
+
+        this.maxRunningTasks = options.maxRunningTasks
+        this.instance = options.instance
+        this.cronObj = new Cron(options.cronHz, this.consoleLog)
     }
 
     get active() { return this.isActive }
@@ -30,6 +37,7 @@ export default abstract class TaskRunnerAbstract {
     abstract loadTasks(tasksToLoad:number): Promise<ITaskPersisted[]>
     abstract saveTask(persistedTask:ITaskPersisted): Promise<ITaskPersisted | null>
     abstract erase(): Promise<void>
+    abstract deleteTasksMarked(): Promise<void>
 
     protected loadTasksQueryObj() {
         const topics = Object.keys(this.topicFactory)
@@ -85,7 +93,7 @@ export default abstract class TaskRunnerAbstract {
     }
 
     async lockTask(persistedTask:ITaskPersisted) {
-        persistedTask.worker = this.options.instance
+        persistedTask.worker = this.instance
         const result = await this.saveTask(persistedTask)
         return !!result
     }
@@ -126,9 +134,18 @@ export default abstract class TaskRunnerAbstract {
             this.consoleLog.debug('not active, run aborted')
             return
         }
-        const tasksToStart = this.options.maxRunningTasks - this._numOfRunningTasks
-        this.consoleLog.debug(`running tasks ${ this._numOfRunningTasks }/${ this.options.maxRunningTasks }`)
+        const numOfFactories = Object.values(this.topicFactory).length
+        if (numOfFactories === 0) this.consoleLog.warn('no factory registered, likely no task will be run')
+        const tasksToStart = this.maxRunningTasks - this._numOfRunningTasks
+        this.consoleLog.debug(`running tasks ${ this._numOfRunningTasks }/${ this.maxRunningTasks }`)
         const tasks = await this.retrieveTasksAndLock(tasksToStart)
         tasks.map( task => this.runTask(task) )
+    }
+
+    async cron() {
+        if (!this.cronObj.tryStartRun()) return
+        await this.run()
+        await this.deleteTasksMarked()
+        this.cronObj.runCompleted()
     }
 }

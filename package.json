@@ -1,6 +1,6 @@
 {
   "name": "@winkgroup/task-runner",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "task runner on NodeJS and Mongo",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
@@ -10,7 +10,8 @@
   "scripts": {
     "test": "npx jest",
     "clean": "rm -rf build",
-    "build": "npm run clean && npx tsc"
+    "build": "npm run clean && npx tsc",
+    "playground": "npx ts-node-dev tests/playground.ts"
   },
   "repository": {
     "type": "git",

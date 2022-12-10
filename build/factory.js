@@ -22,8 +22,19 @@ var TaskFactory = /** @class */ (function () {
             taskPersisted.applicant = task.applicant;
         if (task.worker)
             taskPersisted.worker = task.worker;
+        if (task.deleteAt)
+            taskPersisted.deleteAt = task.deleteAt;
         if (task.waitUntil)
             taskPersisted.waitUntil = task.waitUntil;
+        return taskPersisted;
+    };
+    TaskFactory.emptyTaskPersisted = function () {
+        var taskPersisted = {
+            idTask: undefined,
+            state: 'to do',
+            createdAt: (new Date()).toISOString(),
+            updatedAt: (new Date()).toISOString()
+        };
         return taskPersisted;
     };
     return TaskFactory;

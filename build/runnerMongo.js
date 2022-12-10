@@ -56,6 +56,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 var db_mongo_1 = __importDefault(require("@winkgroup/db-mongo"));
 var lodash_1 = __importDefault(require("lodash"));
+var common_1 = require("./common");
 var modelTaskPersisted_1 = require("./modelTaskPersisted");
 var runnerAbstract_1 = __importDefault(require("./runnerAbstract"));
 var TaskRunnerMongo = /** @class */ (function (_super) {
@@ -72,6 +73,11 @@ var TaskRunnerMongo = /** @class */ (function (_super) {
         var db = db_mongo_1.default.get(this.dbUri);
         return db.model(this.collection, modelTaskPersisted_1.schema);
     };
+    TaskRunnerMongo.prototype.doc2persisted = function (doc) {
+        var task = doc.toObject();
+        task.idTask = doc._id.toString();
+        return task;
+    };
     TaskRunnerMongo.prototype.erase = function (withS) {
         if (withS === void 0) { withS = true; }
         return __awaiter(this, void 0, void 0, function () {
@@ -83,6 +89,7 @@ var TaskRunnerMongo = /** @class */ (function (_super) {
                         return [4 /*yield*/, db.dropCollection(withS ? this.collection + 's' : this.collection)];
                     case 1:
                         _a.sent();
+                        this.consoleLog.print('tasks erased');
                         return [2 /*return*/];
                 }
             });
@@ -90,35 +97,69 @@ var TaskRunnerMongo = /** @class */ (function (_super) {
     };
     TaskRunnerMongo.prototype.loadTasks = function (tasksToLoad) {
         return __awaiter(this, void 0, void 0, function () {
-            var topics, Model, query, tasks;
+            var Model, queryObj, query, taskDocs;
+            var _this = this;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        topics = Object.keys(this.topicFactory);
                         Model = this.getModel();
-                        query = Model.find({ topic: { $in: topics } }).sort('-priority');
+                        queryObj = this.loadTasksQueryObj();
+                        query = Model.find(queryObj).sort('-priority');
                         if (tasksToLoad > 0)
                             query = query.limit(tasksToLoad);
                         return [4 /*yield*/, query.exec()];
                     case 1:
-                        tasks = _a.sent();
-                        return [2 /*return*/, tasks];
+                        taskDocs = _a.sent();
+                        this.consoleLog.debug("".concat(taskDocs.length, " tasks loaded"));
+                        return [2 /*return*/, taskDocs.map(function (taskDoc) { return _this.doc2persisted(taskDoc); })];
                 }
             });
         });
     };
-    TaskRunnerMongo.prototype.upsertTask = function (taskPersisted) {
+    TaskRunnerMongo.prototype.saveTask = function (persistedTask) {
         return __awaiter(this, void 0, void 0, function () {
-            var Model, doc;
+            var Model, doc, doc;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         Model = this.getModel();
-                        doc = new Model(taskPersisted);
-                        return [4 /*yield*/, doc.save()];
+                        if (!persistedTask.idTask) return [3 /*break*/, 2];
+                        return [4 /*yield*/, Model.findByIdAndUpdate(persistedTask.idTask, persistedTask, {
+                                returnDocument: 'after',
+                                overwrite: true,
+                                upsert: true,
+                                new: true
+                            })];
                     case 1:
+                        doc = _a.sent();
+                        persistedTask = this.doc2persisted(doc);
+                        this.consoleLog.debug("task ".concat((0, common_1.persistedTaskTitle)(persistedTask), " updated"));
+                        return [2 /*return*/, persistedTask];
+                    case 2:
+                        doc = new Model(persistedTask);
+                        return [4 /*yield*/, doc.save()];
+                    case 3:
                         _a.sent();
-                        return [2 /*return*/, doc];
+                        persistedTask = this.doc2persisted(doc);
+                        this.consoleLog.debug("new task ".concat((0, common_1.persistedTaskTitle)(persistedTask), " saved"));
+                        return [2 /*return*/, persistedTask];
+                }
+            });
+        });
+    };
+    TaskRunnerMongo.prototype.deleteTasksMarked = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var Model, now, result;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        Model = this.getModel();
+                        now = (new Date()).toISOString();
+                        return [4 /*yield*/, Model.deleteMany({ deleteAt: { $lt: now } })];
+                    case 1:
+                        result = _a.sent();
+                        this.consoleLog.debug("".concat(result.deletedCount, " tasks deleted"));
+                        return [2 /*return*/];
                 }
             });
         });

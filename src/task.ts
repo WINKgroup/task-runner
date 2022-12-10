@@ -2,6 +2,7 @@ import ConsoleLog from "@winkgroup/console-log"
 import _ from "lodash"
 import { InputTask, ITaskPersisted, TaskSignal } from "./common"
 import { EventEmitter } from 'node:events'
+import Cron from "@winkgroup/cron"
 
 export default abstract class Task extends EventEmitter {
     protected running = false
@@ -78,5 +79,10 @@ export default abstract class Task extends EventEmitter {
         if (this._id) title += ` (${ this._id })`
 
         return title
+    }
+
+    setCompleted(millisecondsForDeletion = 30000) {
+        this._state = 'completed'
+        this.deleteAt = Cron.comeBackIn(millisecondsForDeletion)
     }
 }
