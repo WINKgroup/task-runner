@@ -12,6 +12,7 @@ function getEmptyInputTask() {
         state: 'to do',
         createdAt: (new Date()).toISOString()
     };
+    return inputTask;
 }
 exports.getEmptyInputTask = getEmptyInputTask;
 function getEmptyTaskPersisted() {
