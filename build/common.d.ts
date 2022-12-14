@@ -24,6 +24,8 @@ export declare function persistedTaskTitle(persistedTask: ITaskPersisted): strin
 export interface InputTask extends Omit<ITaskPersisted, 'idTask' | 'updatedAt'> {
     id?: any;
 }
+export declare function getEmptyInputTask(): void;
+export declare function getEmptyTaskPersisted(): ITaskPersisted;
 export type TaskSignal = 'pause' | 'stop' | 'resume';
 export interface TaskRunnerFindTasksParams {
     queryObj: object;

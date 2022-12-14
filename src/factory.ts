@@ -23,15 +23,4 @@ export default abstract class TaskFactory {
 
         return taskPersisted
     }
-
-    static emptyTaskPersisted() {
-        const taskPersisted:ITaskPersisted = {
-            idTask: undefined,
-            state: 'to do',
-            createdAt: (new Date()).toISOString(),
-            updatedAt: (new Date()).toISOString()
-        }
-
-        return taskPersisted
-    }
 }

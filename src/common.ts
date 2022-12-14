@@ -34,6 +34,24 @@ export interface InputTask extends Omit<ITaskPersisted, 'idTask' | 'updatedAt' >
     id?: any
 }
 
+export function getEmptyInputTask() {
+    const inputTask:InputTask = {
+        state: 'to do',
+        createdAt: (new Date()).toISOString()
+    }
+}
+
+export function getEmptyTaskPersisted() {
+    const taskPersisted:ITaskPersisted = {
+        idTask: undefined,
+        state: 'to do',
+        createdAt: (new Date()).toISOString(),
+        updatedAt: (new Date()).toISOString()
+    }
+
+    return taskPersisted
+}
+
 export type TaskSignal = 'pause' | 'stop' | 'resume'
 
 export interface TaskRunnerFindTasksParams {

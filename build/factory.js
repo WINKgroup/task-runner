@@ -28,15 +28,6 @@ var TaskFactory = /** @class */ (function () {
             taskPersisted.waitUntil = task.waitUntil;
         return taskPersisted;
     };
-    TaskFactory.emptyTaskPersisted = function () {
-        var taskPersisted = {
-            idTask: undefined,
-            state: 'to do',
-            createdAt: (new Date()).toISOString(),
-            updatedAt: (new Date()).toISOString()
-        };
-        return taskPersisted;
-    };
     return TaskFactory;
 }());
 exports.default = TaskFactory;
