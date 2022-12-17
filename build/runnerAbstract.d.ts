@@ -27,6 +27,7 @@ export default abstract class TaskRunnerAbstract {
     protected loadTasksQueryObj(): {
         [key: string]: any;
     };
+    registerFactory(topic: string, factory: TaskFactory): void;
     getFactory(topic?: string): TaskFactory | null;
     unpersistTask(persistedTask: ITaskPersisted): Task | null;
     persistTask(task: Task, save?: boolean): Promise<ITaskPersisted | null>;

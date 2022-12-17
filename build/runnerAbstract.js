@@ -94,6 +94,10 @@ var TaskRunnerAbstract = /** @class */ (function () {
         }
         return queryObj;
     };
+    TaskRunnerAbstract.prototype.registerFactory = function (topic, factory) {
+        this.topicFactory[topic] = factory;
+        this.consoleLog.print("new factory registered for topic \"".concat(topic, "\""));
+    };
     TaskRunnerAbstract.prototype.getFactory = function (topic) {
         try {
             if (!topic) {
@@ -214,6 +218,7 @@ var TaskRunnerAbstract = /** @class */ (function () {
                 }
             });
         }); });
+        this.consoleLog.print("running task ".concat(task.id, "..."));
         return task.run();
     };
     TaskRunnerAbstract.prototype.run = function () {

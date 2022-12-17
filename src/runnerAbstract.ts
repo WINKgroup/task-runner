@@ -64,6 +64,11 @@ export default abstract class TaskRunnerAbstract {
         return queryObj
     }
 
+    registerFactory(topic:string, factory:TaskFactory) {
+        this.topicFactory[topic] = factory
+        this.consoleLog.print(`new factory registered for topic "${ topic }"`)
+    }
+
     getFactory(topic?:string) {
         try {
             if (!topic) {
@@ -129,6 +134,7 @@ export default abstract class TaskRunnerAbstract {
             const result = await this.persistTask(task)
             if (!result) this.consoleLog.error(`unable to persist task ${ task.title() }`)
         } )
+        this.consoleLog.print(`running task ${ task.id }...`)
         return task.run()
     }
 
