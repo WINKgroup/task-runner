@@ -95,6 +95,21 @@ var TaskRunnerMongo = /** @class */ (function (_super) {
             });
         });
     };
+    TaskRunnerMongo.prototype.getById = function (id) {
+        return __awaiter(this, void 0, void 0, function () {
+            var Model, doc;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        Model = this.getModel();
+                        return [4 /*yield*/, Model.findById(id)];
+                    case 1:
+                        doc = _a.sent();
+                        return [2 /*return*/, doc ? this.doc2persisted(doc) : null];
+                }
+            });
+        });
+    };
     TaskRunnerMongo.prototype.findTasks = function (inputParams) {
         return __awaiter(this, void 0, void 0, function () {
             var Model, params, query, taskDocs;

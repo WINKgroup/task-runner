@@ -32,6 +32,12 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
         this.consoleLog.print('tasks erased')
     }
 
+    async getById(id:string) {
+        const Model = this.getModel()
+        const doc = await Model.findById(id)
+        return doc ? this.doc2persisted(doc) : null
+    }
+
     async findTasks(inputParams: Partial<TaskRunnerFindTasksParams>) {
         const Model = this.getModel()
         const params:TaskRunnerFindTasksParams = _.defaults(inputParams, {
