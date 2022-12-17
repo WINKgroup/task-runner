@@ -21,6 +21,7 @@ export default abstract class TaskRunnerAbstract {
     abstract loadTasks(tasksToLoad: number): Promise<ITaskPersisted[]>;
     abstract saveTask(persistedTask: ITaskPersisted): Promise<ITaskPersisted | null>;
     abstract getById(id: string): Promise<ITaskPersisted | null>;
+    abstract deleteById(id: string): Promise<void>;
     abstract erase(): Promise<void>;
     abstract deleteTasksMarked(): Promise<void>;
     protected loadTasksQueryObj(): {

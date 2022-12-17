@@ -56,6 +56,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 var db_mongo_1 = __importDefault(require("@winkgroup/db-mongo"));
 var lodash_1 = __importDefault(require("lodash"));
+var mongodb_1 = require("mongodb");
 var common_1 = require("./common");
 var modelTaskPersisted_1 = require("./modelTaskPersisted");
 var runnerAbstract_1 = __importDefault(require("./runnerAbstract"));
@@ -106,6 +107,21 @@ var TaskRunnerMongo = /** @class */ (function (_super) {
                     case 1:
                         doc = _a.sent();
                         return [2 /*return*/, doc ? this.doc2persisted(doc) : null];
+                }
+            });
+        });
+    };
+    TaskRunnerMongo.prototype.deleteById = function (id) {
+        return __awaiter(this, void 0, void 0, function () {
+            var Model;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        Model = this.getModel();
+                        return [4 /*yield*/, Model.deleteOne({ _id: new mongodb_1.ObjectId(id) })];
+                    case 1:
+                        _a.sent();
+                        return [2 /*return*/];
                 }
             });
         });

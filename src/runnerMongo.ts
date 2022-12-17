@@ -1,5 +1,6 @@
 import Db from "@winkgroup/db-mongo"
 import _ from "lodash"
+import { ObjectId } from "mongodb"
 import { ITaskPersisted, persistedTaskTitle, TaskRunnerFindTasksParams, TaskRunnerMongoOptions } from "./common"
 import { ITaskDoc, ITaskModel, schema } from "./modelTaskPersisted"
 import TaskRunnerAbstract from "./runnerAbstract"
@@ -36,6 +37,11 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
         const Model = this.getModel()
         const doc = await Model.findById(id)
         return doc ? this.doc2persisted(doc) : null
+    }
+
+    async deleteById(id:string) {
+        const Model = this.getModel()
+        await Model.deleteOne({_id: new ObjectId(id)})
     }
 
     async findTasks(inputParams: Partial<TaskRunnerFindTasksParams>) {
