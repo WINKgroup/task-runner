@@ -157,4 +157,17 @@ export default abstract class TaskRunnerAbstract {
         await this.deleteTasksMarked()
         this.cronObj.runCompleted()
     }
+
+    shutdown() {
+        this.isActive = false
+        return new Promise<void>( resolve => {
+            const intervalFunc = setInterval( () => {
+                this.isActive = false
+                if (this._numOfRunningTasks === 0) {
+                    clearInterval(intervalFunc)
+                    resolve()
+                }
+            }, 1000)
+        })
+    }
 }

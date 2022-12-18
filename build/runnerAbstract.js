@@ -265,6 +265,19 @@ var TaskRunnerAbstract = /** @class */ (function () {
             });
         });
     };
+    TaskRunnerAbstract.prototype.shutdown = function () {
+        var _this = this;
+        this.isActive = false;
+        return new Promise(function (resolve) {
+            var intervalFunc = setInterval(function () {
+                _this.isActive = false;
+                if (_this._numOfRunningTasks === 0) {
+                    clearInterval(intervalFunc);
+                    resolve();
+                }
+            }, 1000);
+        });
+    };
     return TaskRunnerAbstract;
 }());
 exports.default = TaskRunnerAbstract;

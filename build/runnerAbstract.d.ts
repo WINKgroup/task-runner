@@ -36,4 +36,5 @@ export default abstract class TaskRunnerAbstract {
     protected runTask(task: Task): Promise<void>;
     run(): Promise<void>;
     cron(): Promise<void>;
+    shutdown(): Promise<void>;
 }
