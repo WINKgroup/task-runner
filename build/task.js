@@ -14,6 +14,17 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -55,52 +66,31 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 var console_log_1 = __importDefault(require("@winkgroup/console-log"));
+var cron_1 = __importDefault(require("@winkgroup/cron"));
 var lodash_1 = __importDefault(require("lodash"));
 var node_events_1 = require("node:events");
-var cron_1 = __importDefault(require("@winkgroup/cron"));
+var uuid_1 = require("uuid");
 var Task = /** @class */ (function (_super) {
     __extends(Task, _super);
     function Task(inputOptions) {
         var _this = _super.call(this) || this;
-        _this.running = false;
-        _this._response = undefined;
-        _this.consoleLog = new console_log_1.default({ prefix: 'Task' });
-        var options = lodash_1.default.defaults(inputOptions, {
-            state: 'to do',
-            topic: '',
-            priority: 0,
-            createdAt: (new Date()).toISOString()
-        });
-        _this._id = options.id;
+        _this._running = false;
+        var options = lodash_1.default.defaults(inputOptions, { state: 'to do' });
         _this._state = options.state;
-        _this._topic = options.topic;
         _this.data = options.data;
         _this._response = options.response;
-        _this.priority = options.priority;
-        _this.applicant = options.applicant;
-        _this.worker = options.worker;
-        _this.createdAt = options.createdAt;
         _this.deleteAt = options.deleteAt;
         _this.waitUntil = options.waitUntil;
+        _this.consoleLog = new console_log_1.default({ prefix: 'Task' });
         return _this;
     }
-    Object.defineProperty(Task.prototype, "id", {
-        get: function () { return this._id; },
-        enumerable: false,
-        configurable: true
-    });
     Object.defineProperty(Task.prototype, "state", {
         get: function () { return this._state; },
         enumerable: false,
         configurable: true
     });
-    Object.defineProperty(Task.prototype, "topic", {
-        get: function () { return this._topic; },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(Task.prototype, "isRunning", {
-        get: function () { return this.running; },
+    Object.defineProperty(Task.prototype, "running", {
+        get: function () { return this._running; },
         enumerable: false,
         configurable: true
     });
@@ -114,40 +104,109 @@ var Task = /** @class */ (function (_super) {
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        if (this.running) {
+                        if (this._running) {
                             this.consoleLog.warn('already running');
                             return [2 /*return*/];
                         }
-                        this.running = true;
+                        this._running = true;
                         this._response = undefined;
                         this.emit('started');
                         return [4 /*yield*/, this._run()];
                     case 1:
                         _a.sent();
                         this.emit('ended', this._response);
-                        this.running = false;
+                        this._running = false;
                         return [2 /*return*/];
                 }
             });
         });
     };
-    Task.prototype.unpersistHelper = function (taskPersisted) {
-        this._id = taskPersisted.idTask;
-        this._topic = taskPersisted.topic ? taskPersisted.topic : '';
+    Task.prototype.stop = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!this._running) return [3 /*break*/, 2];
+                        if (!this._stop)
+                            throw new Error('stop not implemented');
+                        return [4 /*yield*/, this._stop()];
+                    case 1:
+                        _a.sent();
+                        _a.label = 2;
+                    case 2:
+                        this.emit('stopped', this._response);
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    Task.prototype.pause = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!this._pause)
+                            throw new Error('pause not implemented');
+                        return [4 /*yield*/, this._pause()];
+                    case 1:
+                        _a.sent();
+                        this.emit('paused', this._response);
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    Task.prototype.resume = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!this._resume)
+                            throw new Error('resume not implemented');
+                        return [4 /*yield*/, this._resume()];
+                    case 1:
+                        _a.sent();
+                        this.emit('resumed', this._response);
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    Task.prototype.recover = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!this._recover)
+                            throw new Error('recover not implemented');
+                        return [4 /*yield*/, this._recover()];
+                    case 1:
+                        _a.sent();
+                        this.emit('recovered', this._response);
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    Task.prototype.persist = function (topic, inputOptions) {
+        var options = lodash_1.default.defaults(inputOptions, {
+            persistedId: (0, uuid_1.v1)(),
+            createdAt: (new Date()).toISOString(),
+            updatedAt: (new Date()).toISOString()
+        });
+        var persistedTask = __assign(__assign({}, options), { state: this._state, topic: topic, data: this.data, response: this._response, deleteAt: this.deleteAt, waitUntil: this.waitUntil });
+        return persistedTask;
+    };
+    /**
+     * you should use an instance of TaskFactory to perform unpersist
+     *
+     */
+    Task.prototype._unpersistHelperForTaskFactory = function (taskPersisted) {
+        this._state = taskPersisted.state;
         this.data = taskPersisted.data;
         this._response = taskPersisted.response;
-        this.priority = taskPersisted.priority ? taskPersisted.priority : 0;
-        this.applicant = taskPersisted.applicant;
-        this.worker = taskPersisted.worker;
-        this.createdAt = taskPersisted.createdAt;
         this.deleteAt = taskPersisted.deleteAt;
         this.waitUntil = taskPersisted.waitUntil;
-    };
-    Task.prototype.title = function () {
-        var title = this._topic;
-        if (this._id)
-            title += " (".concat(this._id, ")");
-        return title;
     };
     Task.prototype.setCompleted = function (millisecondsForDeletion) {
         if (millisecondsForDeletion === void 0) { millisecondsForDeletion = 30000; }

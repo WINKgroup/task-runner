@@ -1,10 +1,14 @@
 import Db from "@winkgroup/db-mongo"
 import _ from "lodash"
 import { ObjectId } from "mongodb"
-import { ITaskPersisted, persistedTaskTitle, TaskRunnerFindTasksParams, TaskRunnerMongoOptions } from "./common"
+import { IPersistedTask, TaskRunnerFindTasksParams } from "./common"
 import { ITaskDoc, ITaskModel, schema } from "./modelTaskPersisted"
-import TaskRunnerAbstract from "./runnerAbstract"
+import TaskRunnerAbstract, { TaskRunnerOptions } from "./runnerAbstract"
 
+export interface TaskRunnerMongoOptions extends TaskRunnerOptions {
+    collection: string
+
+}
 export default class TaskRunnerMongo extends TaskRunnerAbstract {
     dbUri:string
     collection:string
@@ -21,30 +25,24 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
         return db.model<ITaskDoc, ITaskModel>(this.collection, schema)
     }
 
-    protected doc2persisted(doc: ITaskDoc) {
-        const task = doc.toObject() as ITaskPersisted
-        task.idTask = doc._id.toString()
-        return task
-    }
-    
     async erase(withS = true) {
         const db = Db.get(this.dbUri)
         await db.dropCollection(withS ? this.collection + 's' : this.collection)
         this.consoleLog.print('tasks erased')
     }
 
-    async getById(id:string) {
+    async getPersistedTaskById(persistedId:string) {
         const Model = this.getModel()
-        const doc = await Model.findById(id)
-        return doc ? this.doc2persisted(doc) : null
+        const doc = await Model.findOne({persistedId: persistedId})
+        return doc ? doc.toObject() as IPersistedTask : null
     }
 
-    async deleteById(id:string) {
+    async deletePersistedTaskById(persistedId:string) {
         const Model = this.getModel()
-        await Model.deleteOne({_id: new ObjectId(id)})
+        await Model.deleteOne({persistedId: persistedId})
     }
 
-    async findTasks(inputParams: Partial<TaskRunnerFindTasksParams>) {
+    async findPersistedTasks(inputParams: Partial<TaskRunnerFindTasksParams>) {
         const Model = this.getModel()
         const params:TaskRunnerFindTasksParams = _.defaults(inputParams, {
             queryObj: {},
@@ -59,7 +57,7 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
         if (params.sort) query = query.sort(params.sort)
         const taskDocs = await query.exec()
         this.consoleLog.debug(`${ taskDocs.length } tasks found`)
-        return taskDocs.map( taskDoc => this.doc2persisted(taskDoc) )
+        return taskDocs.map( taskDoc => taskDoc.toObject() as IPersistedTask )
     }
 
     async loadTasks(tasksToLoad:number) {
@@ -70,31 +68,26 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
         if (tasksToLoad > 0) query = query.limit(tasksToLoad)
         const taskDocs = await query.exec()
         this.consoleLog.debug(`${ taskDocs.length } tasks loaded`)
-        return taskDocs.map( taskDoc => this.doc2persisted(taskDoc) )
+        return taskDocs.map( taskDoc => taskDoc.toObject() as IPersistedTask )
     }
 
-    async saveTask(persistedTask:ITaskPersisted) {
+    async savePersistedTask(persistedTask:IPersistedTask) {
         const Model = this.getModel()
-        if (persistedTask.idTask) {
-            const doc = await Model.findByIdAndUpdate(persistedTask.idTask, persistedTask, {
-                returnDocument:'after',
+
+        try {
+            const doc = await Model.findOneAndUpdate({persistedId: persistedTask.persistedId}, persistedTask, {
                 overwrite: true,
-                upsert: true,
-                new: true
+                upsert: true
             })
-            persistedTask = this.doc2persisted(doc)
-            this.consoleLog.debug(`task ${ persistedTaskTitle(persistedTask) } updated`)
-            return persistedTask
-        } else {
-            const doc = new Model(persistedTask)
-            await doc.save()
-            persistedTask = this.doc2persisted(doc)
-            this.consoleLog.debug(`new task ${ persistedTaskTitle(persistedTask) } saved`)
-            return persistedTask
+            this.consoleLog.debug(`task ${ persistedTask.persistedId } saved`)
+            return true
+        } catch (e) {
+            console.error(e)
+            return false
         }
     }
 
-    async deleteTasksMarked() {
+    async deletePersistedTasksMarked() {
         const Model = this.getModel()
         const now = (new Date()).toISOString()
         const result = await Model.deleteMany({ deleteAt: { $lt: now } })

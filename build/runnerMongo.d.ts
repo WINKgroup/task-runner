@@ -1,17 +1,19 @@
-import { ITaskPersisted, TaskRunnerFindTasksParams, TaskRunnerMongoOptions } from "./common";
-import { ITaskDoc, ITaskModel } from "./modelTaskPersisted";
-import TaskRunnerAbstract from "./runnerAbstract";
+import { IPersistedTask, TaskRunnerFindTasksParams } from "./common";
+import { ITaskModel } from "./modelTaskPersisted";
+import TaskRunnerAbstract, { TaskRunnerOptions } from "./runnerAbstract";
+export interface TaskRunnerMongoOptions extends TaskRunnerOptions {
+    collection: string;
+}
 export default class TaskRunnerMongo extends TaskRunnerAbstract {
     dbUri: string;
     collection: string;
     constructor(dbUri: string, inputOptions?: Partial<TaskRunnerMongoOptions>);
     getModel(): ITaskModel;
-    protected doc2persisted(doc: ITaskDoc): ITaskPersisted;
     erase(withS?: boolean): Promise<void>;
-    getById(id: string): Promise<ITaskPersisted | null>;
-    deleteById(id: string): Promise<void>;
-    findTasks(inputParams: Partial<TaskRunnerFindTasksParams>): Promise<ITaskPersisted[]>;
-    loadTasks(tasksToLoad: number): Promise<ITaskPersisted[]>;
-    saveTask(persistedTask: ITaskPersisted): Promise<ITaskPersisted>;
-    deleteTasksMarked(): Promise<void>;
+    getPersistedTaskById(persistedId: string): Promise<IPersistedTask | null>;
+    deletePersistedTaskById(persistedId: string): Promise<void>;
+    findPersistedTasks(inputParams: Partial<TaskRunnerFindTasksParams>): Promise<IPersistedTask[]>;
+    loadTasks(tasksToLoad: number): Promise<IPersistedTask[]>;
+    savePersistedTask(persistedTask: IPersistedTask): Promise<boolean>;
+    deletePersistedTasksMarked(): Promise<void>;
 }

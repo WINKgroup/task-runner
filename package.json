@@ -1,6 +1,6 @@
 {
   "name": "@winkgroup/task-runner",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "task runner on NodeJS and Mongo",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
@@ -26,15 +26,17 @@
   "homepage": "https://github.com/WINKgroup/task-runner#readme",
   "dependencies": {
     "@winkgroup/console-log": "^1.0.9",
-    "@winkgroup/cron": "^1.0.2",
+    "@winkgroup/cron": "^1.0.5",
     "@winkgroup/db-mongo": "^1.1.5",
     "@winkgroup/network": "^1.1.4",
-    "lodash": "^4.17.21"
+    "lodash": "^4.17.21",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
-    "@types/jest": "^29.2.4",
+    "@types/jest": "^29.2.5",
     "@types/lodash": "^4.14.191",
-    "@types/node": "^18.11.16",
+    "@types/node": "^18.11.18",
+    "@types/uuid": "^9.0.0",
     "jest": "^29.3.1",
     "ts-jest": "^29.0.3",
     "ts-node": "^10.9.1",

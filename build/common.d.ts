@@ -1,31 +1,22 @@
-export interface TaskRunnerOptions {
-    maxRunningTasks: number;
-    cronHz: number;
-    instance: string;
-}
-export interface TaskRunnerMongoOptions extends TaskRunnerOptions {
-    collection: string;
-}
-export interface ITaskPersisted {
-    idTask: any;
-    state: 'to do' | 'completed';
-    topic?: string;
-    data?: any;
-    response?: any;
+export interface IPersistedTaskSpecificAttributes {
+    persistedId: string;
+    topic: string;
     priority?: number;
     applicant?: string;
     worker?: string;
     createdAt: string;
     updatedAt: string;
+}
+export interface InputTask {
+    state: 'to do' | 'completed';
+    data?: any;
+    response?: any;
     deleteAt?: string;
     waitUntil?: string;
 }
-export declare function persistedTaskTitle(persistedTask: ITaskPersisted): string;
-export interface InputTask extends Omit<ITaskPersisted, 'idTask' | 'updatedAt'> {
-    id?: any;
+export interface IPersistedTask extends IPersistedTaskSpecificAttributes, InputTask {
 }
-export declare function getEmptyInputTask(): InputTask;
-export declare function getEmptyTaskPersisted(): ITaskPersisted;
+export declare function getEmptyPersistedTask(): IPersistedTask;
 export type TaskSignal = 'pause' | 'stop' | 'resume';
 export interface TaskRunnerFindTasksParams {
     queryObj: object;

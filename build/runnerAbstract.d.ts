@@ -1,40 +1,64 @@
-import { ITaskPersisted, TaskRunnerFindTasksParams, TaskRunnerOptions } from "./common";
+/// <reference types="node" />
 import ConsoleLog from "@winkgroup/console-log";
-import Task from "./task";
-import TaskFactory from "./factory";
 import Cron from "@winkgroup/cron";
-export default abstract class TaskRunnerAbstract {
+import { EventEmitter } from 'node:events';
+import { Namespace } from 'socket.io';
+import { IPersistedTask, IPersistedTaskSpecificAttributes, TaskRunnerFindTasksParams } from "./common";
+import TaskFactory from "./factory";
+import Task from "./task";
+export interface TaskRunnerOptions {
+    instance: string;
+    everySeconds: number;
+    topicFactories: {
+        [topic: string]: TaskFactory;
+    };
+    maxRunningTasks: number;
+    startActive: boolean;
     consoleLog: ConsoleLog;
-    protected isActive: boolean;
-    protected _numOfRunningTasks: number;
+    ioNamespace: Namespace;
+    housekeeperEverySeconds: number;
+}
+export default abstract class TaskRunnerAbstract extends EventEmitter {
+    instance: string;
+    cronObj: Cron;
     topicFactory: {
         [topic: string]: TaskFactory;
     };
     maxRunningTasks: number;
-    instance: string;
-    cronObj: Cron;
+    consoleLog: ConsoleLog;
+    io?: Namespace;
+    protected _active: boolean;
+    protected _setup: boolean;
+    protected _persistedTasks: {
+        [key: string]: IPersistedTask;
+    };
+    houseKeeperCronObj: Cron;
     constructor(inputOptions?: Partial<TaskRunnerOptions>);
     get active(): boolean;
-    set active(isActive: boolean);
+    get list(): IPersistedTask[];
+    get taskIds(): string[];
     get numOfRunningTasks(): number;
-    abstract findTasks(params: Partial<TaskRunnerFindTasksParams>): Promise<ITaskPersisted[]>;
-    abstract loadTasks(tasksToLoad: number): Promise<ITaskPersisted[]>;
-    abstract saveTask(persistedTask: ITaskPersisted): Promise<ITaskPersisted | null>;
-    abstract getById(id: string): Promise<ITaskPersisted | null>;
-    abstract deleteById(id: string): Promise<void>;
+    abstract findPersistedTasks(params: Partial<TaskRunnerFindTasksParams>): Promise<IPersistedTask[]>;
+    abstract savePersistedTask(persistedTask: IPersistedTask): Promise<boolean>;
+    abstract getPersistedTaskById(persistedId: string): Promise<IPersistedTask | null>;
+    abstract deletePersistedTaskById(persistedId: string): Promise<void>;
     abstract erase(): Promise<void>;
-    abstract deleteTasksMarked(): Promise<void>;
+    abstract deletePersistedTasksMarked(): Promise<void>;
+    protected abstract loadTasks(numOfTasksToLoad: number): Promise<IPersistedTask[]>;
+    start(): void;
+    stop(force?: boolean): Promise<void>;
     protected loadTasksQueryObj(): {
         [key: string]: any;
     };
-    registerFactory(topic: string, factory: TaskFactory): void;
-    getFactory(topic?: string): TaskFactory | null;
-    unpersistTask(persistedTask: ITaskPersisted): Task | null;
-    persistTask(task: Task, save?: boolean): Promise<ITaskPersisted | null>;
-    lockTask(persistedTask: ITaskPersisted): Promise<boolean>;
-    protected retrieveTasksAndLock(tasksToStart: number): Promise<Task[]>;
-    protected runTask(task: Task): Promise<void>;
+    registerFactory(factory: TaskFactory, topic?: string): void;
+    getFactory(topic?: string): TaskFactory;
+    unpersistTask(persistedTask: IPersistedTask): Task;
+    persistTask(task: Task, topic: string, inputOptions?: Omit<Partial<IPersistedTaskSpecificAttributes>, 'topic'>, save?: boolean): Promise<IPersistedTask>;
+    lockPersistedTask(persistedTask: IPersistedTask): Promise<boolean>;
+    protected retrieveTasksAndLock(tasksToStart: number): Promise<IPersistedTask[]>;
+    protected runPersistedTaskAndUnlock(persistedTask: IPersistedTask): Promise<void>;
     run(): Promise<void>;
     cron(): Promise<void>;
-    shutdown(): Promise<void>;
+    isIoTokenValid(token: string): boolean;
+    setIo(): void;
 }

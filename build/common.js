@@ -1,27 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getEmptyTaskPersisted = exports.getEmptyInputTask = exports.persistedTaskTitle = void 0;
-function persistedTaskTitle(persistedTask) {
-    var title = persistedTask.topic ? persistedTask.topic : '';
-    title += " (".concat(persistedTask.idTask, ")");
-    return title;
-}
-exports.persistedTaskTitle = persistedTaskTitle;
-function getEmptyInputTask() {
-    var inputTask = {
-        state: 'to do',
-        createdAt: (new Date()).toISOString()
-    };
-    return inputTask;
-}
-exports.getEmptyInputTask = getEmptyInputTask;
-function getEmptyTaskPersisted() {
-    var taskPersisted = {
-        idTask: undefined,
-        state: 'to do',
+exports.getEmptyPersistedTask = void 0;
+var uuid_1 = require("uuid");
+function getEmptyPersistedTask() {
+    var persistedTask = {
+        persistedId: (0, uuid_1.v1)(),
+        topic: 'default',
         createdAt: (new Date()).toISOString(),
-        updatedAt: (new Date()).toISOString()
+        updatedAt: (new Date()).toISOString(),
+        state: 'to do'
     };
-    return taskPersisted;
+    return persistedTask;
 }
-exports.getEmptyTaskPersisted = getEmptyTaskPersisted;
+exports.getEmptyPersistedTask = getEmptyPersistedTask;

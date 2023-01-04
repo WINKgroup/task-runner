@@ -1,57 +1,36 @@
-export interface TaskRunnerOptions {
-    maxRunningTasks:number
-    cronHz:number
-    instance:string
-}
+import { v1 as uuid } from 'uuid'
 
-export interface TaskRunnerMongoOptions extends TaskRunnerOptions {
-    collection: string
-}
-
-export interface ITaskPersisted {
-    idTask: any
-    state: 'to do' | 'completed'
-    topic?: string
-    data?: any
-    response?: any
+export interface IPersistedTaskSpecificAttributes {
+    persistedId: string
+    topic: string
     priority?: number
     applicant?: string
     worker?: string
     createdAt: string
     updatedAt: string
+}
+
+export interface InputTask {
+    state: 'to do' | 'completed'
+    data?: any
+    response?: any
     deleteAt?: string
     waitUntil?: string
 }
 
-export function persistedTaskTitle(persistedTask: ITaskPersisted) {
-    let title = persistedTask.topic ? persistedTask.topic : ''
-    title += ` (${ persistedTask.idTask })`
-
-    return title
+export interface IPersistedTask extends IPersistedTaskSpecificAttributes, InputTask {
 }
 
-export interface InputTask extends Omit<ITaskPersisted, 'idTask' | 'updatedAt' > {
-    id?: any
-}
-
-export function getEmptyInputTask() {
-    const inputTask:InputTask = {
-        state: 'to do',
-        createdAt: (new Date()).toISOString()
-    }
-
-    return inputTask
-}
-
-export function getEmptyTaskPersisted() {
-    const taskPersisted:ITaskPersisted = {
-        idTask: undefined,
-        state: 'to do',
+export function getEmptyPersistedTask() {
+    const persistedTask:IPersistedTask = {
+        persistedId: uuid(),
+        topic: 'default',
         createdAt: (new Date()).toISOString(),
-        updatedAt: (new Date()).toISOString()
+        updatedAt: (new Date()).toISOString(),
+        state: 'to do'
     }
 
-    return taskPersisted
+    return persistedTask
 }
 
 export type TaskSignal = 'pause' | 'stop' | 'resume'

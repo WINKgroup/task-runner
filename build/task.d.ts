@@ -1,30 +1,34 @@
 /// <reference types="node" />
 import ConsoleLog from "@winkgroup/console-log";
-import { InputTask, ITaskPersisted } from "./common";
 import { EventEmitter } from 'node:events';
+import { InputTask, IPersistedTask, IPersistedTaskSpecificAttributes } from "./common";
 export default abstract class Task extends EventEmitter {
-    protected running: boolean;
-    protected _id: any;
     protected _state: 'to do' | 'completed';
-    protected _topic: string;
-    data: any;
-    protected _response: any;
-    priority: number;
-    applicant?: string;
-    worker?: string;
-    createdAt: string;
-    deleteAt?: string;
-    waitUntil?: string;
+    data?: any;
+    protected _response?: any;
+    protected deleteAt?: string;
+    protected waitUntil?: string;
+    protected _running: boolean;
     consoleLog: ConsoleLog;
     constructor(inputOptions?: InputTask);
-    get id(): any;
     get state(): "completed" | "to do";
-    get topic(): string;
-    get isRunning(): boolean;
+    get running(): boolean;
     get response(): any;
     protected abstract _run(): Promise<void>;
+    protected abstract _stop?(): Promise<void>;
+    protected abstract _pause?(): Promise<void>;
+    protected abstract _resume?(): Promise<void>;
+    protected abstract _recover?(): Promise<void>;
     run(): Promise<void>;
-    unpersistHelper(taskPersisted: ITaskPersisted): void;
-    title(): string;
+    stop(): Promise<void>;
+    pause(): Promise<void>;
+    resume(): Promise<void>;
+    recover(): Promise<void>;
+    persist(topic: string, inputOptions?: Omit<Partial<IPersistedTaskSpecificAttributes>, 'topic'>): IPersistedTask;
+    /**
+     * you should use an instance of TaskFactory to perform unpersist
+     *
+     */
+    _unpersistHelperForTaskFactory(taskPersisted: IPersistedTask): void;
     setCompleted(millisecondsForDeletion?: number): void;
 }

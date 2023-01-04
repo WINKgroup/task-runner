@@ -1,84 +1,111 @@
 import ConsoleLog from "@winkgroup/console-log"
-import _ from "lodash"
-import { InputTask, ITaskPersisted, TaskSignal } from "./common"
-import { EventEmitter } from 'node:events'
 import Cron from "@winkgroup/cron"
+import _ from "lodash"
+import { EventEmitter } from 'node:events'
+import { InputTask, IPersistedTask, IPersistedTaskSpecificAttributes } from "./common"
+import { v1 as uuid } from 'uuid'
 
 export default abstract class Task extends EventEmitter {
-    protected running = false
-    protected _id:any
     protected _state:'to do' | 'completed'
-    protected _topic
-    data: any
-    protected _response = undefined as any
-    priority: number
-    applicant?: string
-    worker?: string
-    createdAt: string
-    deleteAt?: string
-    waitUntil?: string
-    consoleLog = new ConsoleLog({prefix: 'Task'})
+    data?: any
+    protected _response?: any
+    protected deleteAt?: string
+    protected waitUntil?: string
+
+    protected _running = false
+    consoleLog:ConsoleLog
 
     constructor(inputOptions?:InputTask) {
         super()
-        const options = _.defaults(inputOptions, {
-            state: 'to do',
-            topic: '',
-            priority: 0,
-            createdAt: (new Date()).toISOString()
-        })
-        this._id = options.id
+        const options = _.defaults(inputOptions, { state: 'to do' })
         this._state = options.state
-        this._topic = options.topic
         this.data = options.data
         this._response = options.response
-        this.priority = options.priority
-        this.applicant = options.applicant
-        this.worker = options.worker
-        this.createdAt = options.createdAt
         this.deleteAt = options.deleteAt
         this.waitUntil = options.waitUntil
+
+        this.consoleLog = new ConsoleLog({ prefix: 'Task' })
     }
 
-    get id() { return this._id }
     get state() { return this._state }
-    get topic() { return this._topic }
-    get isRunning() { return this.running }
+    get running() { return this._running }
     get response() { return this._response }
 
     protected abstract _run(): Promise<void>
+    protected abstract _stop?(): Promise<void>
+    protected abstract _pause?(): Promise<void>
+    protected abstract _resume?(): Promise<void>
+    protected abstract _recover?(): Promise<void>
 
     async run() {
-        if (this.running) {
+        if (this._running) {
             this.consoleLog.warn('already running')
             return
         }
-        this.running = true
+        this._running = true
         this._response = undefined
         this.emit('started')
         await this._run()
         this.emit('ended', this._response)
-        this.running = false
+        this._running = false
     }
 
-    unpersistHelper(taskPersisted: ITaskPersisted) {
-        this._id = taskPersisted.idTask
-        this._topic = taskPersisted.topic ? taskPersisted.topic : ''
+    async stop() {
+        if (this._running) {
+            if (!this._stop) throw new Error('stop not implemented')
+            await this._stop()
+        }
+        this.emit('stopped', this._response)
+    }
+
+    async pause() {
+        if (!this._pause) throw new Error('pause not implemented')
+        await this._pause()
+        this.emit('paused', this._response)
+    }
+
+    async resume() {
+        if (!this._resume) throw new Error('resume not implemented')
+        await this._resume()
+        this.emit('resumed', this._response)
+    }
+
+    async recover() {
+        if (!this._recover) throw new Error('recover not implemented')
+        await this._recover()
+        this.emit('recovered', this._response)
+    }
+
+    persist(topic:string, inputOptions?:Omit<Partial<IPersistedTaskSpecificAttributes>, 'topic'>) {
+        const options = _.defaults(inputOptions, {
+            persistedId: uuid(),
+            createdAt: (new Date()).toISOString(),
+            updatedAt: (new Date()).toISOString()
+        })
+
+        const persistedTask:IPersistedTask = {
+            ...options,
+            state: this._state,
+            topic: topic,
+            data: this.data,
+            response: this._response,
+            deleteAt: this.deleteAt,
+            waitUntil: this.waitUntil
+        }
+
+        return persistedTask
+    }
+
+    /**
+     * you should use an instance of TaskFactory to perform unpersist
+     * 
+     */
+    _unpersistHelperForTaskFactory(taskPersisted: IPersistedTask) {
+        this._state = taskPersisted.state
         this.data = taskPersisted.data
         this._response = taskPersisted.response
-        this.priority = taskPersisted.priority ? taskPersisted.priority : 0
-        this.applicant = taskPersisted.applicant
-        this.worker = taskPersisted.worker
-        this.createdAt = taskPersisted.createdAt
         this.deleteAt = taskPersisted.deleteAt
         this.waitUntil = taskPersisted.waitUntil
-    }
-
-    title() {
-        let title = this._topic
-        if (this._id) title += ` (${ this._id })`
-
-        return title
     }
 
     setCompleted(millisecondsForDeletion = 30000) {

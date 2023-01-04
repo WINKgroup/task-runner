@@ -1,7 +1,7 @@
-import mongoose, { Document } from 'mongoose'
-import { ITaskPersisted } from './common'
+import mongoose, { Document, Types } from 'mongoose'
+import { IPersistedTask } from './common'
 
-export interface ITaskDoc extends ITaskPersisted, Document {
+export interface ITaskDoc extends IPersistedTask, Document {
     title(): string
 }
 
@@ -9,8 +9,9 @@ export interface ITaskModel extends mongoose.Model<ITaskDoc> {
 }
 
 export const schema = new mongoose.Schema<ITaskDoc, ITaskModel>({
+    persistedId: {type: String, unique: true},
     state: {type: String, enum: ['to do', 'completed'], default: 'to do'},
-    topic: String,
+    topic: {type: String, required: true },
     data: mongoose.Schema.Types.Mixed,
     response: mongoose.Schema.Types.Mixed,
     priority: Number,

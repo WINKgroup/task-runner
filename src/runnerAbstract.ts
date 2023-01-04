@@ -1,52 +1,103 @@
-import { ITaskPersisted, persistedTaskTitle, TaskRunnerFindTasksParams, TaskRunnerOptions } from "./common"
-import _ from 'lodash'
 import ConsoleLog from "@winkgroup/console-log"
-import Task from "./task"
-import TaskFactory from "./factory"
 import Cron from "@winkgroup/cron"
+import _ from 'lodash'
+import { EventEmitter } from 'node:events'
+import { Namespace } from 'socket.io'
+import { IPersistedTask, IPersistedTaskSpecificAttributes, TaskRunnerFindTasksParams } from "./common"
+import TaskFactory from "./factory"
+import Task from "./task"
 
-export default abstract class TaskRunnerAbstract {
-    consoleLog = new ConsoleLog({prefix: 'Task Runner'})
-    protected isActive = true
-    protected _numOfRunningTasks = 0
-    topicFactory = {} as {[topic:string]: TaskFactory}
-    maxRunningTasks: number
+export interface TaskRunnerOptions {
+    instance:string
+    everySeconds:number
+    topicFactories: {[topic:string]: TaskFactory}
+    maxRunningTasks:number
+    startActive: boolean
+    consoleLog:ConsoleLog
+    ioNamespace: Namespace
+    housekeeperEverySeconds:number
+}
+
+export default abstract class TaskRunnerAbstract extends EventEmitter {
     instance: string
     cronObj:Cron
-
+    topicFactory = {} as {[topic:string]: TaskFactory}
+    maxRunningTasks: number
+    consoleLog:ConsoleLog
+    io?:Namespace
+    
+    protected _active:boolean
+    protected _setup = false
+    protected _persistedTasks = {} as {[key: string]: IPersistedTask}
+    houseKeeperCronObj:Cron
+    
     constructor(inputOptions?:Partial<TaskRunnerOptions>) {
+        super()
         const options = _.defaults(inputOptions, {
+            instance: 'default',
+            everySeconds: 0,
             maxRunningTasks: 5,
-            cronHz: 0,
-            instance: 'default'
+            startActive: true,
+            consoleLog: new ConsoleLog({prefix: 'Task Runner'}),
+            housekeeperEverySeconds: 10 * 60
         })
 
-        this.maxRunningTasks = options.maxRunningTasks
         this.instance = options.instance
-        this.cronObj = new Cron(options.cronHz, this.consoleLog)
+        this.cronObj = new Cron(options.everySeconds, options.consoleLog)
+        this.maxRunningTasks = options.maxRunningTasks
+        this._active = options.startActive
+        this.consoleLog = options.consoleLog
+        this.io = options.ioNamespace
+        this.houseKeeperCronObj = new Cron(options.housekeeperEverySeconds, options.consoleLog)
+
+        this.setIo()
     }
 
-    get active() { return this.isActive }
-    set active(isActive:boolean) {
-        if (isActive && !this.isActive) this.run()
-        this.isActive = isActive
-    }
+    get active() { return this._active }
 
-    get numOfRunningTasks() { return this._numOfRunningTasks }
+    get list() { return Object.values(this._persistedTasks) }
+    get taskIds() { return Object.keys(this._persistedTasks) }
+    get numOfRunningTasks() { return Object.keys(this._persistedTasks).length }
 
-    abstract findTasks(params: Partial<TaskRunnerFindTasksParams>): Promise<ITaskPersisted[]>
-    abstract loadTasks(tasksToLoad:number): Promise<ITaskPersisted[]>
-    abstract saveTask(persistedTask:ITaskPersisted): Promise<ITaskPersisted | null>
-    abstract getById(id:string): Promise<ITaskPersisted | null>
-    abstract deleteById(id:string): Promise<void>
+    abstract findPersistedTasks(params: Partial<TaskRunnerFindTasksParams>): Promise<IPersistedTask[]>
+    abstract savePersistedTask(persistedTask:IPersistedTask): Promise<boolean>
+    abstract getPersistedTaskById(persistedId:string): Promise<IPersistedTask | null>
+    abstract deletePersistedTaskById(persistedId:string): Promise<void>
     abstract erase(): Promise<void>
-    abstract deleteTasksMarked(): Promise<void>
+    abstract deletePersistedTasksMarked(): Promise<void>
+    protected abstract loadTasks(numOfTasksToLoad:number): Promise<IPersistedTask[]>
+
+    start() {
+        const needsRun = !this._active
+        this._active = true
+        if (needsRun) this.run()
+    }
+
+    async stop(force = false) {
+        if (!this._active) return
+        this._active = false
+        await Promise.all(
+            this.list.map( persistedTask => {
+                const task = this.unpersistTask(persistedTask)
+                if (force && task.stop) {
+                    return task.stop()
+                } else {
+                    if (force) this.consoleLog.warn(`unable to perform "force" option since task ${ persistedTask.persistedId } has no stop method`)
+                    const waitForEnd = () => new Promise<void>( resolve => {
+                        task.on('ended', resolve)
+                    })
+                    return waitForEnd
+                }
+            } )
+        )
+    }
 
     protected loadTasksQueryObj() {
         const topics = Object.keys(this.topicFactory)
         const now = (new Date()).toISOString()
         const queryObj:{[key:string]: any} = { 
             state: 'to do',
+            topic: {$in: topics},
             worker: {$exists: false},
             $or: [
                 { waitUntil: {$exists: false} },
@@ -54,120 +105,109 @@ export default abstract class TaskRunnerAbstract {
             ]
         }
         
-        if (topics.indexOf('') !== -1) {
-            if(topics.length > 1) throw new Error('topic empty should be used alone')
-            queryObj['topic'] = {$exists: false}
-        } else {
-            queryObj['topic'] = {$in: topics}
-        }
-
         return queryObj
     }
 
-    registerFactory(topic:string, factory:TaskFactory) {
+    registerFactory(factory:TaskFactory, topic = 'default') {
         this.topicFactory[topic] = factory
         this.consoleLog.print(`new factory registered for topic "${ topic }"`)
     }
 
-    getFactory(topic?:string) {
-        try {
-            if (!topic) {
-                const topicFactoryList = Object.values(this.topicFactory)
-                if (topicFactoryList.length === 0) throw new Error('no topic factory registered')
-                return topicFactoryList[0]
-            } else {
-                const factory = this.topicFactory[ topic ]
-                if (!factory) throw new Error(`no factory registered for topic "${ topic }"`)
-                return factory
-            }
-        } catch (e) {
-            this.consoleLog.error(e as string)
-            return null
-        }
+    getFactory(topic = 'default') {
+        const factory = this.topicFactory[ topic ]
+        if (!factory) throw new Error(`no factory registered for topic "${ topic }"`)
+        return factory
     }
 
-    unpersistTask(persistedTask:ITaskPersisted) {
+    unpersistTask(persistedTask:IPersistedTask) {
         const factory = this.getFactory(persistedTask.topic)
-        return factory ? factory.unpersist(persistedTask) : null
+        return factory.unpersist(persistedTask)
     }
 
-    async persistTask(task:Task, save = true) {
-        const factory = this.getFactory(task.topic)
-        if (!factory) throw new Error(`unable to save task ${ task.title() }`)
-        const persistedTask = factory.persist(task)
-        if (!save) return persistedTask
-        const result = await this.saveTask(persistedTask)
-        return result
+    async persistTask(task:Task, topic: string, inputOptions?:Omit<Partial<IPersistedTaskSpecificAttributes>, 'topic'>, save = false) {
+        const options = _.defaults(inputOptions, { applicant: this.instance })
+        const persistedTask = task.persist(topic, options)
+
+        if (save) await this.savePersistedTask(persistedTask)
+        return persistedTask
     }
 
-    async lockTask(persistedTask:ITaskPersisted) {
+    async lockPersistedTask(persistedTask:IPersistedTask) {
         persistedTask.worker = this.instance
-        const result = await this.saveTask(persistedTask)
-        return !!result
+        return this.savePersistedTask(persistedTask)
     }
 
     protected async retrieveTasksAndLock(tasksToStart:number) {
-        const tasks = [] as Task[]
         if (tasksToStart <= 0) return []
         const persistedTasks = await this.loadTasks(tasksToStart)
         for(const persistedTask of persistedTasks) {
-            const task = this.unpersistTask( persistedTask )
-            if (!task) continue
-            const locked = await this.lockTask(persistedTask)
-            if (!locked) {
-                this.consoleLog.debug(`unable to lock task ${ persistedTaskTitle(persistedTask) }`)
+            const isLocked = await this.lockPersistedTask(persistedTask)
+            if (!isLocked) {
+                this.consoleLog.debug(`unable to lock task ${ persistedTask.persistedId }`)
                 continue
-            } else this.consoleLog.debug(`task ${ persistedTaskTitle(persistedTask) } locked`)
-            tasks.push(task)
+            } else this.consoleLog.debug(`task ${ persistedTask.persistedId } locked`)
+            persistedTasks.push(persistedTask)
         }
 
-        return tasks
+        return persistedTasks
     }
 
-    protected runTask(task:Task) {
-        ++this._numOfRunningTasks
-        this.consoleLog.debug(`running task ${ task.title() }`)
-        task.addListener('ended', async () => {
-            --this._numOfRunningTasks
-            task.worker = undefined
-            this.consoleLog.debug(`unlocking task ${ task.title() }`)
-            const result = await this.persistTask(task)
-            if (!result) this.consoleLog.error(`unable to persist task ${ task.title() }`)
-        } )
-        this.consoleLog.print(`running task ${ task.id }...`)
-        return task.run()
+    protected async runPersistedTaskAndUnlock(persistedTask:IPersistedTask) {
+        this._persistedTasks[persistedTask.persistedId] = persistedTask
+        this.consoleLog.debug(`running task ${ persistedTask.persistedId }...`)
+        const task = this.unpersistTask(persistedTask)
+        await task.run()
+        persistedTask = task.persist(persistedTask.topic, {
+            persistedId: persistedTask.persistedId,
+            createdAt: persistedTask.createdAt,
+            applicant: persistedTask.applicant
+        })
+        delete persistedTask.worker
+        await this.savePersistedTask(persistedTask)
     }
 
     async run() {
-        if (!this.isActive) {
+        if (!this._active) {
             this.consoleLog.debug('not active, run aborted')
             return
         }
         const numOfFactories = Object.values(this.topicFactory).length
         if (numOfFactories === 0) this.consoleLog.warn('no factory registered, likely no task will be run')
-        const tasksToStart = this.maxRunningTasks - this._numOfRunningTasks
-        this.consoleLog.debug(`running tasks ${ this._numOfRunningTasks }/${ this.maxRunningTasks }`)
-        const tasks = await this.retrieveTasksAndLock(tasksToStart)
-        tasks.map( task => this.runTask(task) )
+        const tasksToStart = this.maxRunningTasks - this.numOfRunningTasks
+        this.consoleLog.debug(`running tasks ${ this.numOfRunningTasks }/${ this.maxRunningTasks }`)
+        const persistedTasks = await this.retrieveTasksAndLock(tasksToStart)
+        persistedTasks.map( persistedTask => this.runPersistedTaskAndUnlock(persistedTask) )
     }
 
     async cron() {
-        if (!this.cronObj.tryStartRun()) return
-        await this.run()
-        await this.deleteTasksMarked()
-        this.cronObj.runCompleted()
+        if (this.cronObj.tryStartRun()) {
+            await this.run()
+            this.cronObj.runCompleted()
+        }
+        
+        if (this.houseKeeperCronObj.tryStartRun()) {
+            await this.deletePersistedTasksMarked()
+            this.houseKeeperCronObj.runCompleted()
+        }
     }
 
-    shutdown() {
-        this.isActive = false
-        return new Promise<void>( resolve => {
-            const intervalFunc = setInterval( () => {
-                this.isActive = false
-                if (this._numOfRunningTasks === 0) {
-                    clearInterval(intervalFunc)
-                    resolve()
-                }
-            }, 1000)
+    isIoTokenValid(token:string) {
+        return true
+    }
+
+    setIo() {
+        if (!this.io) return
+
+        this.io.use((socket, next) => {
+            const token = socket.handshake.auth.token
+            if (!this.isIoTokenValid(token)) next( new Error('access denied'))
+                else next()
+        })
+
+        this.io.on('connection', (socket) => {
+            this.consoleLog.debug('client connected')
+            socket.on('start', () => { this._active = true })
+            socket.on('stop', (force?:boolean) => this.stop(force) )
         })
     }
 }
