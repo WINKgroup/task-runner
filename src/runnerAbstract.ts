@@ -176,6 +176,7 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
         })
         delete persistedTask.worker
         await this.savePersistedTask(persistedTask)
+        delete this._persistedTasks[persistedTask.persistedId]
     }
 
     async run() {

@@ -284,6 +284,7 @@ var TaskRunnerAbstract = /** @class */ (function (_super) {
                         return [4 /*yield*/, this.savePersistedTask(persistedTask)];
                     case 2:
                         _a.sent();
+                        delete this._persistedTasks[persistedTask.persistedId];
                         return [2 /*return*/];
                 }
             });
