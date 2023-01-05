@@ -3,7 +3,7 @@ import Cron from "@winkgroup/cron"
 import _ from 'lodash'
 import { EventEmitter } from 'node:events'
 import { Namespace } from 'socket.io'
-import { IPersistedTask, IPersistedTaskSpecificAttributes, TaskRunnerFindTasksParams } from "./common"
+import { getEmptyPersistedTask, IPersistedTask, IPersistedTaskSpecificAttributes, TaskRunnerFindTasksParams } from "./common"
 import TaskFactory from "./factory"
 import Task from "./task"
 
@@ -124,6 +124,15 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
         return factory.unpersist(persistedTask)
     }
 
+    async createPersistedTask(inputTask:Partial<IPersistedTask>, save = false) {
+        const persistedTask:IPersistedTask = _.defaults(inputTask, {
+            ...getEmptyPersistedTask(),
+            applicant: this.instance
+        })
+
+        if (save) await this.savePersistedTask(persistedTask)
+    }
+
     async persistTask(task:Task, topic: string, inputOptions?:Omit<Partial<IPersistedTaskSpecificAttributes>, 'topic'>, save = false) {
         const options = _.defaults(inputOptions, { applicant: this.instance })
         const persistedTask = task.persist(topic, options)
@@ -140,16 +149,18 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
     protected async retrieveTasksAndLock(tasksToStart:number) {
         if (tasksToStart <= 0) return []
         const persistedTasks = await this.loadTasks(tasksToStart)
-        for(const persistedTask of persistedTasks) {
-            const isLocked = await this.lockPersistedTask(persistedTask)
-            if (!isLocked) {
-                this.consoleLog.debug(`unable to lock task ${ persistedTask.persistedId }`)
-                continue
-            } else this.consoleLog.debug(`task ${ persistedTask.persistedId } locked`)
-            persistedTasks.push(persistedTask)
-        }
-
-        return persistedTasks
+        await Promise.all(
+            persistedTasks.map(
+                async persistedTask => {
+                    const isLocked = await this.lockPersistedTask(persistedTask)
+                    if (!isLocked) {
+                        this.consoleLog.debug(`unable to lock task ${ persistedTask.persistedId }`)
+                        delete persistedTask.worker
+                    } else this.consoleLog.debug(`task ${ persistedTask.persistedId } locked`)
+                }
+            )
+        )
+        return persistedTasks.filter( persistedTasks => !!persistedTasks.worker )
     }
 
     protected async runPersistedTaskAndUnlock(persistedTask:IPersistedTask) {
@@ -157,6 +168,7 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
         this.consoleLog.debug(`running task ${ persistedTask.persistedId }...`)
         const task = this.unpersistTask(persistedTask)
         await task.run()
+        
         persistedTask = task.persist(persistedTask.topic, {
             persistedId: persistedTask.persistedId,
             createdAt: persistedTask.createdAt,
@@ -184,7 +196,7 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
             await this.run()
             this.cronObj.runCompleted()
         }
-        
+
         if (this.houseKeeperCronObj.tryStartRun()) {
             await this.deletePersistedTasksMarked()
             this.houseKeeperCronObj.runCompleted()

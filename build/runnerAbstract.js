@@ -14,6 +14,17 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -58,6 +69,7 @@ var console_log_1 = __importDefault(require("@winkgroup/console-log"));
 var cron_1 = __importDefault(require("@winkgroup/cron"));
 var lodash_1 = __importDefault(require("lodash"));
 var node_events_1 = require("node:events");
+var common_1 = require("./common");
 var TaskRunnerAbstract = /** @class */ (function (_super) {
     __extends(TaskRunnerAbstract, _super);
     function TaskRunnerAbstract(inputOptions) {
@@ -170,6 +182,24 @@ var TaskRunnerAbstract = /** @class */ (function (_super) {
         var factory = this.getFactory(persistedTask.topic);
         return factory.unpersist(persistedTask);
     };
+    TaskRunnerAbstract.prototype.createPersistedTask = function (inputTask, save) {
+        if (save === void 0) { save = false; }
+        return __awaiter(this, void 0, void 0, function () {
+            var persistedTask;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        persistedTask = lodash_1.default.defaults(inputTask, __assign(__assign({}, (0, common_1.getEmptyPersistedTask)()), { applicant: this.instance }));
+                        if (!save) return [3 /*break*/, 2];
+                        return [4 /*yield*/, this.savePersistedTask(persistedTask)];
+                    case 1:
+                        _a.sent();
+                        _a.label = 2;
+                    case 2: return [2 /*return*/];
+                }
+            });
+        });
+    };
     TaskRunnerAbstract.prototype.persistTask = function (task, topic, inputOptions, save) {
         if (save === void 0) { save = false; }
         return __awaiter(this, void 0, void 0, function () {
@@ -199,7 +229,8 @@ var TaskRunnerAbstract = /** @class */ (function (_super) {
     };
     TaskRunnerAbstract.prototype.retrieveTasksAndLock = function (tasksToStart) {
         return __awaiter(this, void 0, void 0, function () {
-            var persistedTasks, _i, persistedTasks_1, persistedTask, isLocked;
+            var persistedTasks;
+            var _this = this;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -208,26 +239,26 @@ var TaskRunnerAbstract = /** @class */ (function (_super) {
                         return [4 /*yield*/, this.loadTasks(tasksToStart)];
                     case 1:
                         persistedTasks = _a.sent();
-                        _i = 0, persistedTasks_1 = persistedTasks;
-                        _a.label = 2;
+                        return [4 /*yield*/, Promise.all(persistedTasks.map(function (persistedTask) { return __awaiter(_this, void 0, void 0, function () {
+                                var isLocked;
+                                return __generator(this, function (_a) {
+                                    switch (_a.label) {
+                                        case 0: return [4 /*yield*/, this.lockPersistedTask(persistedTask)];
+                                        case 1:
+                                            isLocked = _a.sent();
+                                            if (!isLocked) {
+                                                this.consoleLog.debug("unable to lock task ".concat(persistedTask.persistedId));
+                                                delete persistedTask.worker;
+                                            }
+                                            else
+                                                this.consoleLog.debug("task ".concat(persistedTask.persistedId, " locked"));
+                                            return [2 /*return*/];
+                                    }
+                                });
+                            }); }))];
                     case 2:
-                        if (!(_i < persistedTasks_1.length)) return [3 /*break*/, 5];
-                        persistedTask = persistedTasks_1[_i];
-                        return [4 /*yield*/, this.lockPersistedTask(persistedTask)];
-                    case 3:
-                        isLocked = _a.sent();
-                        if (!isLocked) {
-                            this.consoleLog.debug("unable to lock task ".concat(persistedTask.persistedId));
-                            return [3 /*break*/, 4];
-                        }
-                        else
-                            this.consoleLog.debug("task ".concat(persistedTask.persistedId, " locked"));
-                        persistedTasks.push(persistedTask);
-                        _a.label = 4;
-                    case 4:
-                        _i++;
-                        return [3 /*break*/, 2];
-                    case 5: return [2 /*return*/, persistedTasks];
+                        _a.sent();
+                        return [2 /*return*/, persistedTasks.filter(function (persistedTasks) { return !!persistedTasks.worker; })];
                 }
             });
         });

@@ -53,6 +53,7 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
     registerFactory(factory: TaskFactory, topic?: string): void;
     getFactory(topic?: string): TaskFactory;
     unpersistTask(persistedTask: IPersistedTask): Task;
+    createPersistedTask(inputTask: Partial<IPersistedTask>, save?: boolean): Promise<void>;
     persistTask(task: Task, topic: string, inputOptions?: Omit<Partial<IPersistedTaskSpecificAttributes>, 'topic'>, save?: boolean): Promise<IPersistedTask>;
     lockPersistedTask(persistedTask: IPersistedTask): Promise<boolean>;
     protected retrieveTasksAndLock(tasksToStart: number): Promise<IPersistedTask[]>;

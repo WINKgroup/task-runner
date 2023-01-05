@@ -1,6 +1,5 @@
 import Db from "@winkgroup/db-mongo"
 import _ from "lodash"
-import { ObjectId } from "mongodb"
 import { IPersistedTask, TaskRunnerFindTasksParams } from "./common"
 import { ITaskDoc, ITaskModel, schema } from "./modelTaskPersisted"
 import TaskRunnerAbstract, { TaskRunnerOptions } from "./runnerAbstract"
@@ -75,10 +74,14 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
         const Model = this.getModel()
 
         try {
-            const doc = await Model.findOneAndUpdate({persistedId: persistedTask.persistedId}, persistedTask, {
-                overwrite: true,
-                upsert: true
-            })
+            const taskDoc = await Model.findOne({ persistedId: persistedTask.persistedId })
+            if (taskDoc) {
+                taskDoc.overwrite(persistedTask)
+                await taskDoc.save()
+            } else {
+                const newDoc = new Model(persistedTask)
+                await newDoc.save()
+            }
             this.consoleLog.debug(`task ${ persistedTask.persistedId } saved`)
             return true
         } catch (e) {
