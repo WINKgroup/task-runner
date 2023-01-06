@@ -24,3 +24,7 @@ export interface TaskRunnerFindTasksParams {
     skip: number;
     sort: string;
 }
+export interface TaskRunnerRunPersistedTaskOptions {
+    lockTask: boolean;
+    forceRunning: boolean;
+}

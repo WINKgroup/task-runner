@@ -3,7 +3,7 @@ import Cron from "@winkgroup/cron"
 import _ from 'lodash'
 import { EventEmitter } from 'node:events'
 import { Namespace } from 'socket.io'
-import { getEmptyPersistedTask, IPersistedTask, IPersistedTaskSpecificAttributes, TaskRunnerFindTasksParams } from "./common"
+import { getEmptyPersistedTask, IPersistedTask, IPersistedTaskSpecificAttributes, TaskRunnerFindTasksParams, TaskRunnerRunPersistedTaskOptions } from "./common"
 import TaskFactory from "./factory"
 import Task from "./task"
 
@@ -159,9 +159,17 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
         return isLocked
     }
 
-    async runPersistedTask(persistedTask:IPersistedTask, lockTask = true) {
+    async runPersistedTask(persistedTask:IPersistedTask, inputOptions?: Partial<TaskRunnerRunPersistedTaskOptions>) {
+        const options:TaskRunnerRunPersistedTaskOptions = _.defaults(inputOptions, {
+            lockTask: true,
+            forceRunning: false
+        })
         const id = persistedTask.persistedId
-        if (!(await this.lockPersistedTask(persistedTask))) return
+        if (!options.forceRunning && persistedTask.state === 'completed') {
+            this.consoleLog.warn(`task ${ id } already completed: not running it again`)
+            return
+        }
+        if (options.lockTask && !(await this.lockPersistedTask(persistedTask))) return
 
         this._persistedTasks[id] = persistedTask
         this.consoleLog.debug(`running task ${ id }...`)
@@ -175,7 +183,7 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
             applicant: persistedTask.applicant
         })
         
-        if (lockTask) delete persistedTask.worker
+        if (options.lockTask) delete persistedTask.worker
         await this.savePersistedTask(persistedTask)
         delete this._persistedTasks[persistedTask.persistedId]
     }

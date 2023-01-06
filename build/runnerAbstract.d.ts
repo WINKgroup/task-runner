@@ -3,7 +3,7 @@ import ConsoleLog from "@winkgroup/console-log";
 import Cron from "@winkgroup/cron";
 import { EventEmitter } from 'node:events';
 import { Namespace } from 'socket.io';
-import { IPersistedTask, IPersistedTaskSpecificAttributes, TaskRunnerFindTasksParams } from "./common";
+import { IPersistedTask, IPersistedTaskSpecificAttributes, TaskRunnerFindTasksParams, TaskRunnerRunPersistedTaskOptions } from "./common";
 import TaskFactory from "./factory";
 import Task from "./task";
 export interface TaskRunnerOptions {
@@ -56,7 +56,7 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
     createPersistedTask(inputTask: Partial<IPersistedTask>, save?: boolean): Promise<void>;
     persistTask(task: Task, topic: string, inputOptions?: Omit<Partial<IPersistedTaskSpecificAttributes>, 'topic'>, save?: boolean): Promise<IPersistedTask>;
     lockPersistedTask(persistedTask: IPersistedTask): Promise<boolean | undefined>;
-    runPersistedTask(persistedTask: IPersistedTask, lockTask?: boolean): Promise<void>;
+    runPersistedTask(persistedTask: IPersistedTask, inputOptions?: Partial<TaskRunnerRunPersistedTaskOptions>): Promise<void>;
     run(): Promise<void>;
     cron(): Promise<void>;
     isIoTokenValid(token: string): boolean;

@@ -245,35 +245,47 @@ var TaskRunnerAbstract = /** @class */ (function (_super) {
             });
         });
     };
-    TaskRunnerAbstract.prototype.runPersistedTask = function (persistedTask, lockTask) {
-        if (lockTask === void 0) { lockTask = true; }
+    TaskRunnerAbstract.prototype.runPersistedTask = function (persistedTask, inputOptions) {
         return __awaiter(this, void 0, void 0, function () {
-            var id, task;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
+            var options, id, _a, task;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
                     case 0:
+                        options = lodash_1.default.defaults(inputOptions, {
+                            lockTask: true,
+                            forceRunning: false
+                        });
                         id = persistedTask.persistedId;
+                        if (!options.forceRunning && persistedTask.state === 'completed') {
+                            this.consoleLog.warn("task ".concat(id, " already completed: not running it again"));
+                            return [2 /*return*/];
+                        }
+                        _a = options.lockTask;
+                        if (!_a) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.lockPersistedTask(persistedTask)];
                     case 1:
-                        if (!(_a.sent()))
+                        _a = !(_b.sent());
+                        _b.label = 2;
+                    case 2:
+                        if (_a)
                             return [2 /*return*/];
                         this._persistedTasks[id] = persistedTask;
                         this.consoleLog.debug("running task ".concat(id, "..."));
                         task = this.unpersistTask(persistedTask);
                         task.consoleLog.generalOptions.verbosity = this.consoleLog.generalOptions.verbosity;
                         return [4 /*yield*/, task.run()];
-                    case 2:
-                        _a.sent();
+                    case 3:
+                        _b.sent();
                         persistedTask = task.persist(persistedTask.topic, {
                             persistedId: id,
                             createdAt: persistedTask.createdAt,
                             applicant: persistedTask.applicant
                         });
-                        if (lockTask)
+                        if (options.lockTask)
                             delete persistedTask.worker;
                         return [4 /*yield*/, this.savePersistedTask(persistedTask)];
-                    case 3:
-                        _a.sent();
+                    case 4:
+                        _b.sent();
                         delete this._persistedTasks[persistedTask.persistedId];
                         return [2 /*return*/];
                 }
