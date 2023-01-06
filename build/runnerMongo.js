@@ -170,37 +170,27 @@ var TaskRunnerMongo = /** @class */ (function (_super) {
     };
     TaskRunnerMongo.prototype.savePersistedTask = function (persistedTask) {
         return __awaiter(this, void 0, void 0, function () {
-            var Model, taskDoc, newDoc, e_1;
+            var Model, e_1;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         Model = this.getModel();
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, 7, , 8]);
-                        return [4 /*yield*/, Model.findOne({ persistedId: persistedTask.persistedId })];
+                        _a.trys.push([1, 3, , 4]);
+                        return [4 /*yield*/, Model.findOneAndUpdate({ persistedId: persistedTask.persistedId }, persistedTask, {
+                                overwrite: true,
+                                upsert: true
+                            })];
                     case 2:
-                        taskDoc = _a.sent();
-                        if (!taskDoc) return [3 /*break*/, 4];
-                        taskDoc.overwrite(persistedTask);
-                        return [4 /*yield*/, taskDoc.save()];
-                    case 3:
                         _a.sent();
-                        return [3 /*break*/, 6];
-                    case 4:
-                        newDoc = new Model(persistedTask);
-                        return [4 /*yield*/, newDoc.save()];
-                    case 5:
-                        _a.sent();
-                        _a.label = 6;
-                    case 6:
                         this.consoleLog.debug("task ".concat(persistedTask.persistedId, " saved"));
                         return [2 /*return*/, true];
-                    case 7:
+                    case 3:
                         e_1 = _a.sent();
                         console.error(e_1);
                         return [2 /*return*/, false];
-                    case 8: return [2 /*return*/];
+                    case 4: return [2 /*return*/];
                 }
             });
         });

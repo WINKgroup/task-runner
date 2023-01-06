@@ -74,14 +74,10 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
         const Model = this.getModel()
 
         try {
-            const taskDoc = await Model.findOne({ persistedId: persistedTask.persistedId })
-            if (taskDoc) {
-                taskDoc.overwrite(persistedTask)
-                await taskDoc.save()
-            } else {
-                const newDoc = new Model(persistedTask)
-                await newDoc.save()
-            }
+            await Model.findOneAndUpdate({persistedId: persistedTask.persistedId}, persistedTask, {
+                overwrite: true,
+                upsert: true
+            })
             this.consoleLog.debug(`task ${ persistedTask.persistedId } saved`)
             return true
         } catch (e) {

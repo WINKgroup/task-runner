@@ -221,68 +221,58 @@ var TaskRunnerAbstract = /** @class */ (function (_super) {
     };
     TaskRunnerAbstract.prototype.lockPersistedTask = function (persistedTask) {
         return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                persistedTask.worker = this.instance;
-                return [2 /*return*/, this.savePersistedTask(persistedTask)];
-            });
-        });
-    };
-    TaskRunnerAbstract.prototype.retrieveTasksAndLock = function (tasksToStart) {
-        return __awaiter(this, void 0, void 0, function () {
-            var persistedTasks;
-            var _this = this;
+            var id, isLocked;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        if (tasksToStart <= 0)
-                            return [2 /*return*/, []];
-                        return [4 /*yield*/, this.loadTasks(tasksToStart)];
+                        id = persistedTask.persistedId;
+                        if (persistedTask.worker) {
+                            this.consoleLog.warn("task ".concat(id, " already running at ").concat(persistedTask.worker, ", not running it again"));
+                            return [2 /*return*/];
+                        }
+                        persistedTask.worker = this.instance;
+                        return [4 /*yield*/, this.savePersistedTask(persistedTask)];
                     case 1:
-                        persistedTasks = _a.sent();
-                        return [4 /*yield*/, Promise.all(persistedTasks.map(function (persistedTask) { return __awaiter(_this, void 0, void 0, function () {
-                                var isLocked;
-                                return __generator(this, function (_a) {
-                                    switch (_a.label) {
-                                        case 0: return [4 /*yield*/, this.lockPersistedTask(persistedTask)];
-                                        case 1:
-                                            isLocked = _a.sent();
-                                            if (!isLocked) {
-                                                this.consoleLog.debug("unable to lock task ".concat(persistedTask.persistedId));
-                                                delete persistedTask.worker;
-                                            }
-                                            else
-                                                this.consoleLog.debug("task ".concat(persistedTask.persistedId, " locked"));
-                                            return [2 /*return*/];
-                                    }
-                                });
-                            }); }))];
-                    case 2:
-                        _a.sent();
-                        return [2 /*return*/, persistedTasks.filter(function (persistedTasks) { return !!persistedTasks.worker; })];
+                        isLocked = _a.sent();
+                        if (!isLocked) {
+                            this.consoleLog.warn("unable to lock task ".concat(id));
+                            delete persistedTask.worker;
+                        }
+                        else
+                            this.consoleLog.debug("task ".concat(id, " locked"));
+                        return [2 /*return*/, isLocked];
                 }
             });
         });
     };
-    TaskRunnerAbstract.prototype.runPersistedTaskAndUnlock = function (persistedTask) {
+    TaskRunnerAbstract.prototype.runPersistedTask = function (persistedTask, lockTask) {
+        if (lockTask === void 0) { lockTask = true; }
         return __awaiter(this, void 0, void 0, function () {
-            var task;
+            var id, task;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        this._persistedTasks[persistedTask.persistedId] = persistedTask;
-                        this.consoleLog.debug("running task ".concat(persistedTask.persistedId, "..."));
-                        task = this.unpersistTask(persistedTask);
-                        return [4 /*yield*/, task.run()];
+                        id = persistedTask.persistedId;
+                        return [4 /*yield*/, this.lockPersistedTask(persistedTask)];
                     case 1:
+                        if (!(_a.sent()))
+                            return [2 /*return*/];
+                        this._persistedTasks[id] = persistedTask;
+                        this.consoleLog.debug("running task ".concat(id, "..."));
+                        task = this.unpersistTask(persistedTask);
+                        task.consoleLog.generalOptions.verbosity = this.consoleLog.generalOptions.verbosity;
+                        return [4 /*yield*/, task.run()];
+                    case 2:
                         _a.sent();
                         persistedTask = task.persist(persistedTask.topic, {
-                            persistedId: persistedTask.persistedId,
+                            persistedId: id,
                             createdAt: persistedTask.createdAt,
                             applicant: persistedTask.applicant
                         });
-                        delete persistedTask.worker;
+                        if (lockTask)
+                            delete persistedTask.worker;
                         return [4 /*yield*/, this.savePersistedTask(persistedTask)];
-                    case 2:
+                    case 3:
                         _a.sent();
                         delete this._persistedTasks[persistedTask.persistedId];
                         return [2 /*return*/];
@@ -306,10 +296,10 @@ var TaskRunnerAbstract = /** @class */ (function (_super) {
                             this.consoleLog.warn('no factory registered, likely no task will be run');
                         tasksToStart = this.maxRunningTasks - this.numOfRunningTasks;
                         this.consoleLog.debug("running tasks ".concat(this.numOfRunningTasks, "/").concat(this.maxRunningTasks));
-                        return [4 /*yield*/, this.retrieveTasksAndLock(tasksToStart)];
+                        return [4 /*yield*/, this.loadTasks(tasksToStart)];
                     case 1:
                         persistedTasks = _a.sent();
-                        persistedTasks.map(function (persistedTask) { return _this.runPersistedTaskAndUnlock(persistedTask); });
+                        persistedTasks.map(function (persistedTask) { return _this.runPersistedTask(persistedTask); });
                         return [2 /*return*/];
                 }
             });

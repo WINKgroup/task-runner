@@ -142,39 +142,40 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
     }
 
     async lockPersistedTask(persistedTask:IPersistedTask) {
+        const id = persistedTask.persistedId
+
+        if (persistedTask.worker) {
+            this.consoleLog.warn(`task ${ id } already running at ${ persistedTask.worker }, not running it again`)
+            return
+        }
+
         persistedTask.worker = this.instance
-        return this.savePersistedTask(persistedTask)
+        const isLocked = await this.savePersistedTask(persistedTask)
+        if (!isLocked) {
+            this.consoleLog.warn(`unable to lock task ${ id }`)
+            delete persistedTask.worker
+        } else this.consoleLog.debug(`task ${ id } locked`)
+
+        return isLocked
     }
 
-    protected async retrieveTasksAndLock(tasksToStart:number) {
-        if (tasksToStart <= 0) return []
-        const persistedTasks = await this.loadTasks(tasksToStart)
-        await Promise.all(
-            persistedTasks.map(
-                async persistedTask => {
-                    const isLocked = await this.lockPersistedTask(persistedTask)
-                    if (!isLocked) {
-                        this.consoleLog.debug(`unable to lock task ${ persistedTask.persistedId }`)
-                        delete persistedTask.worker
-                    } else this.consoleLog.debug(`task ${ persistedTask.persistedId } locked`)
-                }
-            )
-        )
-        return persistedTasks.filter( persistedTasks => !!persistedTasks.worker )
-    }
+    async runPersistedTask(persistedTask:IPersistedTask, lockTask = true) {
+        const id = persistedTask.persistedId
+        if (!(await this.lockPersistedTask(persistedTask))) return
 
-    protected async runPersistedTaskAndUnlock(persistedTask:IPersistedTask) {
-        this._persistedTasks[persistedTask.persistedId] = persistedTask
-        this.consoleLog.debug(`running task ${ persistedTask.persistedId }...`)
+        this._persistedTasks[id] = persistedTask
+        this.consoleLog.debug(`running task ${ id }...`)
         const task = this.unpersistTask(persistedTask)
+        task.consoleLog.generalOptions.verbosity = this.consoleLog.generalOptions.verbosity
         await task.run()
         
         persistedTask = task.persist(persistedTask.topic, {
-            persistedId: persistedTask.persistedId,
+            persistedId: id,
             createdAt: persistedTask.createdAt,
             applicant: persistedTask.applicant
         })
-        delete persistedTask.worker
+        
+        if (lockTask) delete persistedTask.worker
         await this.savePersistedTask(persistedTask)
         delete this._persistedTasks[persistedTask.persistedId]
     }
@@ -188,8 +189,8 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
         if (numOfFactories === 0) this.consoleLog.warn('no factory registered, likely no task will be run')
         const tasksToStart = this.maxRunningTasks - this.numOfRunningTasks
         this.consoleLog.debug(`running tasks ${ this.numOfRunningTasks }/${ this.maxRunningTasks }`)
-        const persistedTasks = await this.retrieveTasksAndLock(tasksToStart)
-        persistedTasks.map( persistedTask => this.runPersistedTaskAndUnlock(persistedTask) )
+        const persistedTasks = await this.loadTasks(tasksToStart)
+        persistedTasks.map( persistedTask => this.runPersistedTask(persistedTask) )
     }
 
     async cron() {
