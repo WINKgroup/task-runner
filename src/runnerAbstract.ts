@@ -193,10 +193,13 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
             this.consoleLog.debug('not active, run aborted')
             return
         }
-        const numOfFactories = Object.values(this.topicFactory).length
-        if (numOfFactories === 0) this.consoleLog.warn('no factory registered, likely no task will be run')
         const tasksToStart = this.maxRunningTasks - this.numOfRunningTasks
         this.consoleLog.debug(`running tasks ${ this.numOfRunningTasks }/${ this.maxRunningTasks }`)
+        if (tasksToStart <= 0) return
+
+        const numOfFactories = Object.values(this.topicFactory).length
+        if (numOfFactories === 0) this.consoleLog.warn('no factory registered, likely no task will be run')
+
         const persistedTasks = await this.loadTasks(tasksToStart)
         persistedTasks.map( persistedTask => this.runPersistedTask(persistedTask) )
     }

@@ -294,7 +294,7 @@ var TaskRunnerAbstract = /** @class */ (function (_super) {
     };
     TaskRunnerAbstract.prototype.run = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var numOfFactories, tasksToStart, persistedTasks;
+            var tasksToStart, numOfFactories, persistedTasks;
             var _this = this;
             return __generator(this, function (_a) {
                 switch (_a.label) {
@@ -303,11 +303,13 @@ var TaskRunnerAbstract = /** @class */ (function (_super) {
                             this.consoleLog.debug('not active, run aborted');
                             return [2 /*return*/];
                         }
+                        tasksToStart = this.maxRunningTasks - this.numOfRunningTasks;
+                        this.consoleLog.debug("running tasks ".concat(this.numOfRunningTasks, "/").concat(this.maxRunningTasks));
+                        if (tasksToStart <= 0)
+                            return [2 /*return*/];
                         numOfFactories = Object.values(this.topicFactory).length;
                         if (numOfFactories === 0)
                             this.consoleLog.warn('no factory registered, likely no task will be run');
-                        tasksToStart = this.maxRunningTasks - this.numOfRunningTasks;
-                        this.consoleLog.debug("running tasks ".concat(this.numOfRunningTasks, "/").concat(this.maxRunningTasks));
                         return [4 /*yield*/, this.loadTasks(tasksToStart)];
                     case 1:
                         persistedTasks = _a.sent();
