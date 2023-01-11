@@ -31,7 +31,7 @@
     "@winkgroup/console-log": "^2.0.1",
     "@winkgroup/cron": "^2.0.0",
     "@winkgroup/db-mongo": "^1.1.5",
-    "@winkgroup/network": "^2.0.0",
+    "@winkgroup/network": "^2.0.1",
     "lodash": "^4.17.21",
     "uuid": "^9.0.0"
   },
