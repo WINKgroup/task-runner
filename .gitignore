@@ -1,2 +1,5 @@
+yarn.lock
 package-lock.json
 playground/test.ts
+dist/**/*
+test/config.json

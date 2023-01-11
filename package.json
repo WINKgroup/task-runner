@@ -2,16 +2,19 @@
   "name": "@winkgroup/task-runner",
   "version": "1.0.14",
   "description": "task runner on NodeJS and Mongo",
-  "main": "./build/index.js",
-  "types": "./build/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
-    "build/**/*"
+    "dist/**/*"
   ],
   "scripts": {
     "test": "npx jest",
-    "clean": "rm -rf build",
-    "build": "npm run clean && npx tsc",
-    "playground": "npx ts-node-dev tests/playground.ts"
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc",
+    "playground": "ts-node-dev tests/playground.ts",
+    "format": "prettier --write 'src/**/*.ts' 'test/**/*.ts' 'playground/**/*.ts'",
+    "prepare": "npm run build",
+    "postversion": "git push && git push --tags && npm publish"
   },
   "repository": {
     "type": "git",
@@ -25,10 +28,10 @@
   },
   "homepage": "https://github.com/WINKgroup/task-runner#readme",
   "dependencies": {
-    "@winkgroup/console-log": "^1.0.9",
-    "@winkgroup/cron": "^1.0.5",
+    "@winkgroup/console-log": "^2.0.1",
+    "@winkgroup/cron": "^2.0.0",
     "@winkgroup/db-mongo": "^1.1.5",
-    "@winkgroup/network": "^1.1.4",
+    "@winkgroup/network": "^2.0.0",
     "lodash": "^4.17.21",
     "uuid": "^9.0.0"
   },
@@ -38,6 +41,7 @@
     "@types/node": "^18.11.18",
     "@types/uuid": "^9.0.0",
     "jest": "^29.3.1",
+    "prettier": "^2.8.2",
     "ts-jest": "^29.0.3",
     "ts-node": "^10.9.1",
     "typescript": "^4.9.4"
