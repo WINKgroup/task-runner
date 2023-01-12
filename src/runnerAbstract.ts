@@ -27,14 +27,14 @@ export interface TaskRunnerOptions {
 export default abstract class TaskRunnerAbstract extends EventEmitter {
     instance: string;
     cronObj: Cron;
-    topicFactory = {} as { [topic: string]: TaskFactory };
+    versionedTopicFactories = {} as { [versionedTopic: string]: TaskFactory };
     maxRunningTasks: number;
     consoleLog: ConsoleLog;
     io?: Namespace;
 
     protected _active: boolean;
     protected _setup = false;
-    protected _persistedTasks = {} as { [key: string]: IPersistedTask };
+    protected _runningTasks = {} as { [key: string]: Task };
     houseKeeperCronObj: Cron;
 
     constructor(inputOptions?: Partial<TaskRunnerOptions>) {
@@ -67,13 +67,13 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
     }
 
     get list() {
-        return Object.values(this._persistedTasks);
+        return Object.values(this._runningTasks);
     }
     get taskIds() {
-        return Object.keys(this._persistedTasks);
+        return Object.keys(this._runningTasks);
     }
     get numOfRunningTasks() {
-        return Object.keys(this._persistedTasks).length;
+        return Object.keys(this._runningTasks).length;
     }
 
     abstract findPersistedTasks(
@@ -81,9 +81,9 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
     ): Promise<IPersistedTask[]>;
     abstract savePersistedTask(persistedTask: IPersistedTask): Promise<boolean>;
     abstract getPersistedTaskById(
-        persistedId: string
+        id: string
     ): Promise<IPersistedTask | null>;
-    abstract deletePersistedTaskById(persistedId: string): Promise<void>;
+    abstract deletePersistedTaskById(id: string): Promise<void>;
     abstract erase(): Promise<void>;
     abstract deletePersistedTasksMarked(): Promise<void>;
     protected abstract loadTasks(
@@ -100,14 +100,14 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
         if (!this._active) return;
         this._active = false;
         await Promise.all(
-            this.list.map((persistedTask) => {
-                const task = this.unpersistTask(persistedTask);
+            this.taskIds.map((id) => {
+                const task = this._runningTasks[id]
                 if (force && task.stop) {
                     return task.stop();
                 } else {
                     if (force)
                         this.consoleLog.warn(
-                            `unable to perform "force" option since task ${persistedTask.persistedId} has no stop method`
+                            `unable to perform "force" option since task ${ id } has no stop method`
                         );
                     const waitForEnd = () =>
                         new Promise<void>((resolve) => {
@@ -120,11 +120,11 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
     }
 
     protected loadTasksQueryObj() {
-        const topics = Object.keys(this.topicFactory);
+        const topics = Object.keys(this.versionedTopicFactories);
         const now = new Date().toISOString();
         const queryObj: { [key: string]: any } = {
             state: 'to do',
-            topic: { $in: topics },
+            versionedTopic: { $in: topics },
             worker: { $exists: false },
             $or: [
                 { waitUntil: { $exists: false } },
@@ -135,28 +135,30 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
         return queryObj;
     }
 
-    registerFactory(factory: TaskFactory, topic = 'default') {
-        this.topicFactory[topic] = factory;
-        this.consoleLog.print(`new factory registered for topic "${topic}"`);
+    registerFactory(factory: TaskFactory, versionedTopics = ['default#1']) {
+        for (const versionedTopic of versionedTopics) {
+            this.versionedTopicFactories[versionedTopic] = factory;
+            this.consoleLog.print(`new factory registered for topic "${ versionedTopic }"`);
+        }
     }
 
-    getFactory(topic = 'default') {
-        const factory = this.topicFactory[topic];
+    getFactory(versionedTopic = 'default#1') {
+        const factory = this.versionedTopicFactories[versionedTopic];
         if (!factory)
-            throw new Error(`no factory registered for topic "${topic}"`);
+            throw new Error(`no factory registered for topic "${ versionedTopic }"`);
         return factory;
     }
 
     unpersistTask(persistedTask: IPersistedTask) {
-        const factory = this.getFactory(persistedTask.topic);
+        const factory = this.getFactory(persistedTask.versionedTopic);
         return factory.unpersist(persistedTask);
     }
 
     async createPersistedTask(
-        inputTask: Partial<IPersistedTask>,
+        inputPersistedTask: Partial<IPersistedTask>,
         save = false
     ) {
-        const persistedTask: IPersistedTask = _.defaults(inputTask, {
+        const persistedTask: IPersistedTask = _.defaults(inputPersistedTask, {
             ...getEmptyPersistedTask(),
             applicant: this.instance,
         });
@@ -166,19 +168,19 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
 
     async persistTask(
         task: Task,
-        topic: string,
-        inputOptions?: Omit<Partial<IPersistedTaskSpecificAttributes>, 'topic'>,
+        versionedTopic: string,
+        inputOptions?: Omit<Partial<IPersistedTaskSpecificAttributes>, 'versionedTopic'>,
         save = false
     ) {
         const options = _.defaults(inputOptions, { applicant: this.instance });
-        const persistedTask = task.persist(topic, options);
+        const persistedTask = task.persist(versionedTopic, options);
 
         if (save) await this.savePersistedTask(persistedTask);
         return persistedTask;
     }
 
     async lockPersistedTask(persistedTask: IPersistedTask) {
-        const id = persistedTask.persistedId;
+        const id = persistedTask.id;
 
         if (persistedTask.worker) {
             this.consoleLog.warn(
@@ -188,6 +190,7 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
         }
 
         persistedTask.worker = this.instance;
+        persistedTask.updatedAt = (new Date()).toISOString()
         const isLocked = await this.savePersistedTask(persistedTask);
         if (!isLocked) {
             this.consoleLog.warn(`unable to lock task ${id}`);
@@ -208,7 +211,7 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
                 forceRunning: false,
             }
         );
-        const id = persistedTask.persistedId;
+        const id = persistedTask.id;
         if (!options.forceRunning && persistedTask.state === 'completed') {
             this.consoleLog.warn(
                 `task ${id} already completed: not running it again`
@@ -218,22 +221,23 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
         if (options.lockTask && !(await this.lockPersistedTask(persistedTask)))
             return;
 
-        this._persistedTasks[id] = persistedTask;
         this.consoleLog.debug(`running task ${id}...`);
         const task = this.unpersistTask(persistedTask);
+        this._runningTasks[id] = task;
         task.consoleLog.generalOptions.verbosity =
             this.consoleLog.generalOptions.verbosity;
         await task.run();
 
-        persistedTask = task.persist(persistedTask.topic, {
-            persistedId: id,
+        persistedTask = task.persist(persistedTask.versionedTopic, {
+            id: id,
             createdAt: persistedTask.createdAt,
             applicant: persistedTask.applicant,
+            priority: persistedTask.priority
         });
 
         if (options.lockTask) delete persistedTask.worker;
         await this.savePersistedTask(persistedTask);
-        delete this._persistedTasks[persistedTask.persistedId];
+        delete this._runningTasks[persistedTask.id];
     }
 
     async run() {
@@ -247,7 +251,7 @@ export default abstract class TaskRunnerAbstract extends EventEmitter {
         );
         if (tasksToStart <= 0) return;
 
-        const numOfFactories = Object.values(this.topicFactory).length;
+        const numOfFactories = Object.values(this.versionedTopicFactories).length;
         if (numOfFactories === 0)
             this.consoleLog.warn(
                 'no factory registered, likely no task will be run'

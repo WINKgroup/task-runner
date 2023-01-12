@@ -87,11 +87,11 @@ export default abstract class Task extends EventEmitter {
     }
 
     persist(
-        topic: string,
-        inputOptions?: Omit<Partial<IPersistedTaskSpecificAttributes>, 'topic'>
+        versionedTopic: string,
+        inputOptions?: Omit<Partial<IPersistedTaskSpecificAttributes>, 'versionedTopic'>
     ) {
         const options = _.defaults(inputOptions, {
-            persistedId: uuid(),
+            id: uuid(),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         });
@@ -99,7 +99,7 @@ export default abstract class Task extends EventEmitter {
         const persistedTask: IPersistedTask = {
             ...options,
             state: this._state,
-            topic: topic,
+            versionedTopic: versionedTopic,
             data: this.data,
             response: this._response,
             deleteAt: this.deleteAt,

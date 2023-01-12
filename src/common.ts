@@ -1,8 +1,8 @@
 import { v1 as uuid } from 'uuid';
 
 export interface IPersistedTaskSpecificAttributes {
-    persistedId: string;
-    topic: string;
+    id: string;
+    versionedTopic: string;
     priority?: number;
     applicant?: string;
     worker?: string;
@@ -24,8 +24,8 @@ export interface IPersistedTask
 
 export function getEmptyPersistedTask() {
     const persistedTask: IPersistedTask = {
-        persistedId: uuid(),
-        topic: 'default',
+        id: uuid(),
+        versionedTopic: 'default#1',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         state: 'to do',

@@ -31,15 +31,15 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
         this.consoleLog.print('tasks erased');
     }
 
-    async getPersistedTaskById(persistedId: string) {
+    async getPersistedTaskById(id: string) {
         const Model = this.getModel();
-        const doc = await Model.findOne({ persistedId: persistedId });
+        const doc = await Model.findOne({ _id: id });
         return doc ? (doc.toObject() as IPersistedTask) : null;
     }
 
-    async deletePersistedTaskById(persistedId: string) {
+    async deletePersistedTaskById(id: string) {
         const Model = this.getModel();
-        await Model.deleteOne({ persistedId: persistedId });
+        await Model.deleteOne({ _id: id });
     }
 
     async findPersistedTasks(inputParams: Partial<TaskRunnerFindTasksParams>) {
@@ -76,14 +76,14 @@ export default class TaskRunnerMongo extends TaskRunnerAbstract {
 
         try {
             await Model.findOneAndUpdate(
-                { persistedId: persistedTask.persistedId },
-                persistedTask,
+                { _id: persistedTask.id },
+                { ...persistedTask, _id: persistedTask.id },
                 {
                     overwrite: true,
                     upsert: true,
                 }
             );
-            this.consoleLog.debug(`task ${persistedTask.persistedId} saved`);
+            this.consoleLog.debug(`task ${persistedTask.id} saved`);
             return true;
         } catch (e) {
             console.error(e);
