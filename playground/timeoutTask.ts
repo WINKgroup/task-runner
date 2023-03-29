@@ -1,4 +1,3 @@
-import Cron from '@winkgroup/cron';
 import _ from 'lodash';
 import { InputTask, IPersistedTask } from '../src/common';
 import TaskFactory from '../src/factory';
@@ -13,17 +12,13 @@ export class TaskFactoryTimeout extends TaskFactory {
 export default class TaskTimeout extends Task {
     data: number;
 
-    protected _stop = undefined;
-    protected _pause = undefined;
-    protected _resume = undefined;
-    protected _recover = undefined;
-
     timeoutObj?: NodeJS.Timeout;
 
     constructor(inputTask: InputTask) {
         inputTask = _.defaults(inputTask, { data: 10000 });
         super(inputTask);
         this.data = inputTask.data;
+        this.consoleLog.generalOptions.prefix = 'TimeoutTask'
     }
 
     _run() {
@@ -32,11 +27,19 @@ export default class TaskTimeout extends Task {
         const task = this as TaskTimeout;
         return new Promise<void>((resolve) => {
             task.consoleLog.print('started');
-            this.timeoutObj = setTimeout(() => {
-                task.consoleLog.print('ended');
-                task.setCompleted();
-                resolve();
-            }, data);
+            let duration = 0
+            const step = 300
+            const interval = setInterval( () => {
+                duration += step
+                this.emit('progress', { spent: duration, total: this.data })
+                if (duration >= data) {
+                    clearInterval(interval)
+                    task.consoleLog.print('ended');
+                    task._response = 100
+                    task.setCompleted();
+                    resolve()
+                }
+            }, step )
         });
     }
 }

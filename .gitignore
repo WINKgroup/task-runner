@@ -3,3 +3,4 @@ package-lock.json
 playground/test.ts
 dist/**/*
 test/config.json
+playground/config.json

@@ -1,49 +1,47 @@
-import { v1 as uuid } from 'uuid';
+export const clientAddressableAttributes = ['id', 'versionedTopic', 'data', 'priority']
+export type TaskSignal = 'pause' | 'stop' | 'resume';
+
+export interface TaskActions {
+    stop?: () => Promise<boolean>
+    pause?: () => Promise<boolean>
+    resume?: () => Promise<boolean>
+    recover?: () => Promise<boolean>
+}
+
+export interface TaskActionAvailability {
+    stop: boolean
+    pause: boolean
+    resume: boolean
+    recover: boolean
+}
+
+export interface SerializedTask {
+    id: string
+    versionedTopic: string
+    state: 'to do' | 'running' | 'paused' | 'completed'
+    data?: any
+    response?: any
+    deleteAt?: string
+    waitUntil?: string
+    availableActions: TaskActionAvailability
+}
 
 export interface IPersistedTaskSpecificAttributes {
-    id: string;
-    versionedTopic: string;
     priority?: number;
     applicant?: string;
     worker?: string;
     createdAt: string;
     updatedAt: string;
+    availableActions: TaskActionAvailability
+    publicUrl?: string
 }
 
-export interface InputTask {
-    state: 'to do' | 'completed';
-    data?: any;
-    response?: any;
-    deleteAt?: string;
-    waitUntil?: string;
-}
+export interface InputTask extends Partial<Omit<SerializedTask, 'availableActions'>> {}
 
 export interface IPersistedTask
     extends IPersistedTaskSpecificAttributes,
-        InputTask {}
+    Omit<SerializedTask, 'id'> {}
 
-export function getEmptyPersistedTask() {
-    const persistedTask: IPersistedTask = {
-        id: uuid(),
-        versionedTopic: 'default#1',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        state: 'to do',
-    };
-
-    return persistedTask;
-}
-
-export type TaskSignal = 'pause' | 'stop' | 'resume';
-
-export interface TaskRunnerFindTasksParams {
-    queryObj: object;
-    limit: number;
-    skip: number;
-    sort: string;
-}
-
-export interface TaskRunnerRunPersistedTaskOptions {
-    lockTask: boolean;
-    forceRunning: boolean; // even if it in "completed" state
+export interface PersistedTaskWithId extends IPersistedTask {
+    id: string
 }

@@ -1,109 +1,148 @@
 import ConsoleLog from '@winkgroup/console-log';
 import Cron from '@winkgroup/cron';
 import _ from 'lodash';
-import { EventEmitter } from 'node:events';
 import {
     InputTask,
     IPersistedTask,
     IPersistedTaskSpecificAttributes,
+    SerializedTask,
+    TaskActionAvailability,
+    TaskActions,
 } from './common';
-import { v1 as uuid } from 'uuid';
+import { EventEmitter } from 'node:events';
 
 export default abstract class Task extends EventEmitter {
-    protected _state: 'to do' | 'completed';
+    readonly id: string
+    readonly versionedTopic: string
+    protected _state: 'to do' | 'running' | 'paused' | 'completed';
     data?: any;
     protected _response?: any;
     protected deleteAt?: string;
     protected waitUntil?: string;
 
-    protected _running = false;
     consoleLog: ConsoleLog;
 
+    protected _actions = {} as TaskActions
+
     constructor(inputOptions?: InputTask) {
-        super();
-        const options = _.defaults(inputOptions, { state: 'to do' });
+        super()
+        const options = _.defaults(inputOptions, {
+            id: '',
+            versionedTopic: 'default#1',
+            state: 'to do'
+        });
+        this.id = options.id
+        this.versionedTopic = options.versionedTopic
         this._state = options.state;
         this.data = options.data;
         this._response = options.response;
         this.deleteAt = options.deleteAt;
         this.waitUntil = options.waitUntil;
 
-        this.consoleLog = new ConsoleLog({ prefix: 'Task' });
+        this.consoleLog = new ConsoleLog({ prefix: `Task ${ this.versionedTopic }`, id: this.id });
     }
 
     get state() {
         return this._state;
     }
-    get running() {
-        return this._running;
-    }
     get response() {
-        return this._response;
+        return _.cloneDeep(this._response);
+    }
+
+    isProgressEmitter() { return false }
+
+    serialize() {
+        const serialized:SerializedTask = {
+            id: this.id,
+            versionedTopic: this.versionedTopic,
+            state: this._state,
+            data: Task._serializeAny(this.data),
+            response: Task._serializeAny(this._response),
+            deleteAt: this.deleteAt,
+            waitUntil: this.waitUntil,
+            availableActions: this.getAvailableActions()
+        }
+
+        return serialized
     }
 
     protected abstract _run(): Promise<void>;
-    protected abstract _stop?(): Promise<void>;
-    protected abstract _pause?(): Promise<void>;
-    protected abstract _resume?(): Promise<void>;
-    protected abstract _recover?(): Promise<void>;
 
     async run() {
-        if (this._running) {
-            this.consoleLog.warn('already running');
-            return;
+        switch(this._state) {
+            case 'running':
+                this.consoleLog.warn('already running');
+                break
+            case 'to do':
+                this._state = 'running'
+                this._response = undefined;
+                this.emit('updated')
+                await this._run();
+                this.emit('updated')
+                break
+            case 'paused':
+                this.consoleLog.warn('no run: paused, use resume instead');
+                break
+            default:
+                break
         }
-        this._running = true;
-        this._response = undefined;
-        this.emit('started');
-        await this._run();
-        this.emit('ended', this._response);
-        this._running = false;
+    }
+
+    hasAction(actionName:'stop' | 'resume' | 'recover' | 'pause') {
+        return !!this._actions[actionName]
+    }
+
+    getAvailableActions() {
+        const list:TaskActionAvailability = {
+            stop: !!this._actions['stop'],
+            resume: !!this._actions['resume'],
+            recover: !!this._actions['recover'],
+            pause:  !!this._actions['pause']
+        }
+
+        return list
+    }
+
+    protected async action(actionName:'stop' | 'resume' | 'recover' | 'pause') {
+        const actionFn = this._actions[actionName]
+        if (actionFn) {
+            const result = await actionFn()
+            if (result) this.emit('updated')
+        } else {
+            this.consoleLog.warn(`action "${ actionName }" called, but not defined`)
+            return false
+        }
     }
 
     async stop() {
-        if (this._running) {
-            if (!this._stop) throw new Error('stop not implemented');
-            await this._stop();
-        }
-        this.emit('stopped', this._response);
+        if (this.state === 'running' || this.state === 'paused') await this.action('stop');
     }
 
     async pause() {
-        if (!this._pause) throw new Error('pause not implemented');
-        await this._pause();
-        this.emit('paused', this._response);
+        if (this.state === 'running') await this.action('pause');
     }
 
     async resume() {
-        if (!this._resume) throw new Error('resume not implemented');
-        await this._resume();
-        this.emit('resumed', this._response);
+        if (this.state === 'paused') await this.action('resume');
     }
 
-    async recover() {
-        if (!this._recover) throw new Error('recover not implemented');
-        await this._recover();
-        this.emit('recovered', this._response);
+    recover() {
+        return this.action('recover')
     }
 
-    persist(
-        versionedTopic: string,
-        inputOptions?: Omit<Partial<IPersistedTaskSpecificAttributes>, 'versionedTopic'>
+    dataToPersist(
+        inputOptions?: Partial<IPersistedTaskSpecificAttributes>
     ) {
         const options = _.defaults(inputOptions, {
-            id: uuid(),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         });
 
+        const serializedData = _.omit(this.serialize(), ['id'])
+
         const persistedTask: IPersistedTask = {
             ...options,
-            state: this._state,
-            versionedTopic: versionedTopic,
-            data: this.data,
-            response: this._response,
-            deleteAt: this.deleteAt,
-            waitUntil: this.waitUntil,
+            ...serializedData
         };
 
         return persistedTask;
@@ -124,5 +163,23 @@ export default abstract class Task extends EventEmitter {
     setCompleted(millisecondsForDeletion = 30000) {
         this._state = 'completed';
         this.deleteAt = Cron.comeBackIn(millisecondsForDeletion);
+    }
+
+    waitUntilStop() {
+        if (this._state !== 'running' && this._state !== 'paused') return Promise.resolve()
+        return new Promise<void>((resolve) => {
+            const resolver = () => {
+                if (this._state === 'running' || this._state === 'paused') return
+                this.off('update', resolver)
+                resolve()
+            }
+
+            this.on('update', resolver)
+        })
+    }
+
+    protected static _serializeAny(obj?:any) {
+        if (obj === undefined) return undefined
+        return JSON.parse(JSON.stringify(obj))
     }
 }
