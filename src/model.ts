@@ -49,11 +49,12 @@ schema.method('title', async function () {
 
 schema.method('updateData', function(data:Partial<PersistedTaskWithId>) {
     const doc = this as ITaskDoc;
+    if (!data.updatedAt) data.updatedAt = new Date().toISOString();
     for( const key in data) {
         if (['id', 'versionedTopic'].indexOf(key) !== -1) continue
         // @ts-ignore
         doc[key] = data[key]
-    }   
+    } 
 })
 
 schema.static('createEmpty', function (versionedTopic = 'default#1') {

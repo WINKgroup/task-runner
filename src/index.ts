@@ -496,13 +496,16 @@ export default class TaskRunner {
                     const docs = await this.io!.realtimeQuery._find(params)
                     result.list = docs.map( doc => mongoDoc2PersistedWithId(doc))
                     const subscriptionId = realtimeQuery.subscribe(params, (list, changeDoc, changeList) => {
-
                         const changeObj:ChangeQueryDocumentList<PersistedTaskWithId> = {
                             operationType: changeList.operationType,
                             position: changeList.position
                         }
-                        if (changeList.doc) changeObj.doc = mongoDoc2PersistedWithId(changeList.doc)
-                        socket.emit('change', changeObj)
+
+                        if (changeList.operationType !== 'multiple') {
+                            if (changeList.doc) changeObj.doc = mongoDoc2PersistedWithId(changeList.doc)
+                            socket.emit('change', changeObj)
+                        }
+                            else socket.emit('list', list.map( doc => mongoDoc2PersistedWithId(doc) ))
                     })
 
                     if (!querySubscriptionsBySocket[socket.id]) querySubscriptionsBySocket[socket.id] = [ subscriptionId ]

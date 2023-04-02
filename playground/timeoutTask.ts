@@ -21,6 +21,10 @@ export default class TaskTimeout extends Task {
         this.consoleLog.generalOptions.prefix = 'TimeoutTask'
     }
 
+    isProgressEmitter(): boolean {
+        return true
+    }
+
     _run() {
         const data = this.data as number;
 

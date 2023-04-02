@@ -103,7 +103,7 @@
         switch(data.operationType) {
             case 'insert':
                 if ($('.task').length === 0) $('#tasks').append(taskBox(data.doc))
-                    else $('.task').eq(data.position - 1).after(taskBox(data.doc))
+                    else $('.task').eq(data.position).before(taskBox(data.doc))
                 break
             case 'update':
                 $(`#${data.doc.id}`).replaceWith( taskBox(data.doc) )
@@ -126,7 +126,8 @@
         isConnected = true
 
         socket.emit('subscribeQuery', {
-            limit: 10
+            limit: 10,
+            sort: {updatedAt: -1}
         }, (data) => {
             if (data.error) alert(data.error)
                 else resetList(data.list)
@@ -135,6 +136,10 @@
 
     socket.on('change', (data) => {
         changeList(data)
+    })
+
+    socket.on('list', (data) => {
+        resetList(data)
     })
 
     socket.on("disconnect", () => {
