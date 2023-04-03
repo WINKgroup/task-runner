@@ -4,7 +4,17 @@ import Db, { QueryParams, RealtimeQuery } from '@winkgroup/db-mongo';
 import { ChangeQueryDocumentList } from '@winkgroup/db-mongo/dist/queryCache';
 import _ from 'lodash';
 import { Namespace, Server as IoServer } from 'socket.io';
-import { clientAddressableAttributes, IPersistedTask, PersistedTaskWithId, SerializedTask } from './common';
+import {
+    clientAddressableAttributes,
+    InputTask,
+    IPersistedTask,
+    IPersistedTaskSpecificAttributes,
+    PersistedTaskWithId,
+    SerializedTask,
+    TaskActionAvailability,
+    TaskActions,
+    TaskSignal,
+} from './common';
 import TaskFactory from './factory';
 import { ITaskDoc, ITaskModel, schema } from './model';
 import Task from './task';
@@ -19,15 +29,15 @@ export interface InputTaskRunner {
     startActive?: boolean;
     consoleLog?: ConsoleLog;
     io?: {
-        publicUrl: string
+        publicUrl: string;
         server: Namespace | IoServer;
-    }
+    };
     housekeeperEverySeconds?: number;
 }
 
 export interface TaskCouple {
-    task: Task,
-    doc: ITaskDoc
+    task: Task;
+    doc: ITaskDoc;
 }
 
 export default class TaskRunner {
@@ -38,18 +48,18 @@ export default class TaskRunner {
 
     versionedTopicFactories = {} as { [versionedTopic: string]: TaskFactory };
     maxRunningTasks: number;
-    
+
     readonly io?: {
-        publicUrl: string
+        publicUrl: string;
         server: Namespace | IoServer;
-        realtimeQuery: RealtimeQuery<SerializedTask & {_id: any}>
-        querySubscriptionsBySocket: {[socketId:string]: string[]}
-    }
+        realtimeQuery: RealtimeQuery<SerializedTask & { _id: any }>;
+        querySubscriptionsBySocket: { [socketId: string]: string[] };
+    };
 
     protected _active: boolean;
     protected _setup = false;
     protected _runningTasks = {} as { [id: string]: TaskCouple };
-    
+
     cronObj: Cron;
     houseKeeperCronObj: Cron;
 
@@ -64,23 +74,25 @@ export default class TaskRunner {
         });
 
         this.instance = options.instance;
-        this.dbUri = options.dbUri
-        this.collectionName = options.collectionName
+        this.dbUri = options.dbUri;
+        this.collectionName = options.collectionName;
         this.consoleLog = options.consoleLog;
 
         this.maxRunningTasks = options.maxRunningTasks;
 
         if (options.io) {
-            const realtimeQuery = new RealtimeQuery<SerializedTask & {_id: any}>({
+            const realtimeQuery = new RealtimeQuery<
+                SerializedTask & { _id: any }
+            >({
                 dbUri: this.dbUri,
-                collectionName: this.collectionName
-            })
+                collectionName: this.collectionName,
+            });
             this.io = {
                 ...options.io,
                 realtimeQuery: realtimeQuery,
-                querySubscriptionsBySocket: {}
-            }
-            this.setIo()
+                querySubscriptionsBySocket: {},
+            };
+            this.setIo();
         }
 
         this.cronObj = new Cron(options.everySeconds, options.consoleLog);
@@ -89,8 +101,8 @@ export default class TaskRunner {
             options.consoleLog
         );
 
-        this._active = false
-        if (options.startActive) process.nextTick( () => this.start() )
+        this._active = false;
+        if (options.startActive) process.nextTick(() => this.start());
     }
 
     get active() {
@@ -109,54 +121,64 @@ export default class TaskRunner {
 
     getModel() {
         const db = Db.get(this.dbUri);
-        if (db.models[this.collectionName]) return db.models[this.collectionName] as ITaskModel
-       
+        if (db.models[this.collectionName])
+            return db.models[this.collectionName] as ITaskModel;
+
         return db.model<ITaskDoc, ITaskModel>(this.collectionName, schema);
     }
 
-    unpersistTask(persistedTask:PersistedTaskWithId) {
-        const factory = this.versionedTopicFactories[ persistedTask.versionedTopic ]
-        if (!factory) throw new Error( `Factory for topic "${ persistedTask.versionedTopic }" not found` )
+    unpersistTask(persistedTask: PersistedTaskWithId) {
+        const factory =
+            this.versionedTopicFactories[persistedTask.versionedTopic];
+        if (!factory)
+            throw new Error(
+                `Factory for topic "${persistedTask.versionedTopic}" not found`
+            );
 
-        return factory.unpersist(persistedTask)
+        return factory.unpersist(persistedTask);
     }
 
     async getPersistedTaskById(id: string) {
-        const TaskModel = this.getModel()
-        const doc = await TaskModel.findById(id)
-        if (!doc) return null
-        return doc.toPersistedWithId()
+        const TaskModel = this.getModel();
+        const doc = await TaskModel.findById(id);
+        if (!doc) return null;
+        return doc.toPersistedWithId();
     }
 
     async getTaskById(id: string) {
-        const persistedTask = await this.getPersistedTaskById(id)
-        if (!persistedTask) return persistedTask
-        return this.unpersistTask(persistedTask)
+        const persistedTask = await this.getPersistedTaskById(id);
+        if (!persistedTask) return persistedTask;
+        return this.unpersistTask(persistedTask);
     }
 
-    async addTaskFromClientAddressableAttributes(attributes: Partial<IPersistedTask>) {
-        attributes = _.pick(attributes, clientAddressableAttributes)
-        attributes = _.omit(attributes, 'id')
+    async addTaskFromClientAddressableAttributes(
+        attributes: Partial<IPersistedTask>
+    ) {
+        attributes = _.pick(attributes, clientAddressableAttributes);
+        attributes = _.omit(attributes, 'id');
 
-        const versionedTopic = attributes.versionedTopic
+        const versionedTopic = attributes.versionedTopic;
         if (!versionedTopic || !this.versionedTopicFactories[versionedTopic]) {
-            this.consoleLog.error(`not registered versionedTopic "${ versionedTopic }" in addTaskFromClientAddressableAttributes`)
-            return 'not registered versionedTopic'
+            this.consoleLog.error(
+                `not registered versionedTopic "${versionedTopic}" in addTaskFromClientAddressableAttributes`
+            );
+            return 'not registered versionedTopic';
         } else {
-            const factory = this.versionedTopicFactories[versionedTopic]
-            const errors = factory.validateClientAddressableAttributes(attributes)
-            if (errors.length > 0) return errors[0]
+            const factory = this.versionedTopicFactories[versionedTopic];
+            const errors =
+                factory.validateClientAddressableAttributes(attributes);
+            if (errors.length > 0) return errors[0];
         }
 
-        const TaskModel = this.getModel()
-        const doc = TaskModel.createEmpty(versionedTopic)
-        doc.updateData(attributes)
+        const TaskModel = this.getModel();
+        const doc = TaskModel.createEmpty(versionedTopic);
+        doc.updateData(attributes);
         try {
-            await doc.save()
-            return doc
+            await doc.save();
+            return doc;
         } catch (e) {
-            if (e instanceof Error) return e.message
-            return 'error'
+            if (e instanceof Error) return e.message;
+            return 'error';
         }
     }
 
@@ -171,7 +193,7 @@ export default class TaskRunner {
     async start() {
         const needsRun = !this._active;
         this._active = true;
-        if (this.io) await this.io.realtimeQuery.start()
+        if (this.io) await this.io.realtimeQuery.start();
         if (needsRun) this.run();
     }
 
@@ -181,8 +203,8 @@ export default class TaskRunner {
         await Promise.all(
             this.runningIds.map((id) => {
                 const task = this._runningTasks[id].task;
-                if (force && task.hasAction('stop')) return task.stop()
-                    else return task.waitUntilStop()
+                if (force && task.hasAction('stop')) return task.stop();
+                else return task.waitUntilStop();
             })
         );
     }
@@ -224,7 +246,7 @@ export default class TaskRunner {
     async lockTask(doc: ITaskDoc) {
         if (doc.worker) {
             this.consoleLog.warn(
-                `task ${ doc.id } already locked at ${doc.worker}, not locking it again`
+                `task ${doc.id} already locked at ${doc.worker}, not locking it again`
             );
             return false;
         }
@@ -232,82 +254,86 @@ export default class TaskRunner {
         doc.worker = this.instance;
         doc.updatedAt = new Date().toISOString();
         try {
-            await doc.save()
-            const Model = this.getModel()
-            const newDoc = await Model.findById(doc._id)
+            await doc.save();
+            const Model = this.getModel();
+            const newDoc = await Model.findById(doc._id);
             if (!newDoc || newDoc.worker !== this.instance) {
-                if (newDoc) doc.worker = newDoc.worker
+                if (newDoc) doc.worker = newDoc.worker;
                 this.consoleLog.warn(
-                    `task ${ doc.id } already locked at ${doc.worker}, not locking it again`
+                    `task ${doc.id} already locked at ${doc.worker}, not locking it again`
                 );
-                return false
+                return false;
             }
             this.consoleLog.debug(`task ${doc.id} locked`);
-            return true
-        } catch(e) {
-            this.consoleLog.warn(`unable to lock task ${ doc.id }`);
+            return true;
+        } catch (e) {
+            this.consoleLog.warn(`unable to lock task ${doc.id}`);
             delete doc.worker;
-            return false
+            return false;
         }
     }
 
-    async runTask(taskCouple:TaskCouple) {
-        const { doc, task } = taskCouple
-        this.consoleLog.debug(`running task ${ task.id }...`);
+    async runTask(taskCouple: TaskCouple) {
+        const { doc, task } = taskCouple;
+        this.consoleLog.debug(`running task ${task.id}...`);
 
-        const isLocked = await this.lockTask(doc)
+        const isLocked = await this.lockTask(doc);
         if (!isLocked) {
-            this.consoleLog.debug(`stop running task ${ task.id }: no lock`);
-            return
+            this.consoleLog.debug(`stop running task ${task.id}: no lock`);
+            return;
         }
 
         task.consoleLog.generalOptions.verbosity =
             this.consoleLog.generalOptions.verbosity;
-        
-        let isSaving = false
-        const waitForSaved = () => new Promise<void>((resolve) => {
-            if (!isSaving) { resolve(); return }
-            const handler = setInterval( () => {
-                if (isSaving) return
-                clearInterval(handler)
-                resolve()
-            }, 100)
-        })
+
+        let isSaving = false;
+        const waitForSaved = () =>
+            new Promise<void>((resolve) => {
+                if (!isSaving) {
+                    resolve();
+                    return;
+                }
+                const handler = setInterval(() => {
+                    if (isSaving) return;
+                    clearInterval(handler);
+                    resolve();
+                }, 100);
+            });
 
         const updater = async () => {
-            doc.updateData( task.serialize() )
-            await waitForSaved()
-            isSaving = true
-            this.consoleLog.debug(JSON.stringify(doc.toPersistedWithId()))
-            await doc.save()
-            isSaving = false
-        }
+            doc.updateData(task.serialize());
+            await waitForSaved();
+            isSaving = true;
+            this.consoleLog.debug(JSON.stringify(doc.toPersistedWithId()));
+            await doc.save();
+            isSaving = false;
+        };
 
-        const emitProgress = (data:any) => {
+        const emitProgress = (data: any) => {
             const progressInfo = {
                 taskId: task.id,
-                data: data
-            }
-            this.io!.server.emit('progress', progressInfo)
-        }
+                data: data,
+            };
+            this.io!.server.emit('progress', progressInfo);
+        };
 
-        task.on('updated', updater)
-        if (this.io) task.on('progress', emitProgress)
+        task.on('updated', updater);
+        if (this.io) task.on('progress', emitProgress);
 
         await task.run();
 
-        task.off('updated', updater)
-        if (this.io) task.off('progress', emitProgress)
+        task.off('updated', updater);
+        if (this.io) task.off('progress', emitProgress);
 
-        await waitForSaved()
-        doc.worker = undefined
-        doc.publicUrl = undefined
-        this.consoleLog.debug(JSON.stringify(doc.toPersistedWithId()))
-        await doc.save()
+        await waitForSaved();
+        doc.worker = undefined;
+        doc.publicUrl = undefined;
+        this.consoleLog.debug(JSON.stringify(doc.toPersistedWithId()));
+        await doc.save();
         delete this._runningTasks[task.id];
     }
 
-    async loadTasks(tasksToLoad:number) {
+    async loadTasks(tasksToLoad: number) {
         const Model = this.getModel();
         const queryObj = this.loadTasksQueryObj();
 
@@ -315,16 +341,16 @@ export default class TaskRunner {
         if (tasksToLoad > 0) query = query.limit(tasksToLoad);
         const docs = await query.exec();
         this.consoleLog.debug(`${docs.length} tasks loaded`);
-        const result = docs.map( doc => {
-            const taskData = doc.toPersistedWithId()
-            const couple:TaskCouple = {
+        const result = docs.map((doc) => {
+            const taskData = doc.toPersistedWithId();
+            const couple: TaskCouple = {
                 doc: doc,
-                task: this.unpersistTask( taskData )
-            }
+                task: this.unpersistTask(taskData),
+            };
 
-            return couple
-        })
-        return result
+            return couple;
+        });
+        return result;
     }
 
     async run() {
@@ -347,9 +373,7 @@ export default class TaskRunner {
             );
 
         const couples = await this.loadTasks(tasksToStart);
-        couples.map((couple) =>
-            this.runTask(couple)
-        );
+        couples.map((couple) => this.runTask(couple));
     }
 
     async setCronTasks() {
@@ -372,21 +396,22 @@ export default class TaskRunner {
         const queryObj: { [key: string]: any } = {
             versionedTopic: { $in: topics },
         };
-        const Model = this.getModel()
+        const Model = this.getModel();
         const docs = await Model.find({
             queryObj: queryObj,
         });
-        for (const doc of docs)
-            delete factoryMap[doc.versionedTopic];
+        for (const doc of docs) delete factoryMap[doc.versionedTopic];
         for (const topic in factoryMap) {
             const factory = factoryMap[topic];
-            const cronPersistedTasks = await factory.createCronPersistedTasks(topic);
+            const cronPersistedTasks = await factory.createCronPersistedTasks(
+                topic
+            );
             Promise.all(
-                cronPersistedTasks.map( cronPersistedTask => {
-                    const doc = new Model(cronPersistedTask)
-                    return doc.save()
+                cronPersistedTasks.map((cronPersistedTask) => {
+                    const doc = new Model(cronPersistedTask);
+                    return doc.save();
                 })
-            )
+            );
         }
     }
 
@@ -414,112 +439,168 @@ export default class TaskRunner {
 
     setIo() {
         if (!this.io) return;
-        const { server, realtimeQuery, querySubscriptionsBySocket } = this.io
-
-
+        const { server, realtimeQuery, querySubscriptionsBySocket } = this.io;
 
         server.use((socket, next) => {
             const token = socket.handshake.auth.token;
             if (1 !== 1) next(new Error('access denied'));
-                else next();
+            else next();
         });
 
         server.on('connection', (socket) => {
             this.consoleLog.debug('client connected');
 
             socket.emit('taskRunnerInfo', {
-                instance: this.instance
-            })
+                instance: this.instance,
+            });
 
-            socket.on('add', async (persistedData:IPersistedTask, callback) => {
-                try {
-                    if (!persistedData.versionedTopic) persistedData.versionedTopic = 'default#1'
-                    this.consoleLog.debug(`adding new task from client: ${ JSON.stringify(persistedData) }`)
-                    const doc = await this.addTaskFromClientAddressableAttributes(persistedData)
-                    if (typeof doc === 'string') callback(doc)
-                        else callback(doc.toPersistedWithId())
-                } catch (e) {
-                    const err = JSON.stringify(e)
-                    this.consoleLog.error(err)
-                    callback(err)
+            socket.on(
+                'add',
+                async (persistedData: IPersistedTask, callback) => {
+                    try {
+                        if (!persistedData.versionedTopic)
+                            persistedData.versionedTopic = 'default#1';
+                        this.consoleLog.debug(
+                            `adding new task from client: ${JSON.stringify(
+                                persistedData
+                            )}`
+                        );
+                        const doc =
+                            await this.addTaskFromClientAddressableAttributes(
+                                persistedData
+                            );
+                        if (typeof doc === 'string') callback(doc);
+                        else callback(doc.toPersistedWithId());
+                    } catch (e) {
+                        const err = JSON.stringify(e);
+                        this.consoleLog.error(err);
+                        callback(err);
+                    }
                 }
-            })
+            );
 
-            socket.on('remove', async (idObj:{id: string}, callback) => {
+            socket.on('remove', async (idObj: { id: string }, callback) => {
                 try {
-                    
-                    let doc:ITaskDoc
+                    let doc: ITaskDoc;
                     if (!this._runningTasks[idObj.id]) {
-                        const Model = this.getModel()
-                        const result = await Model.findById(idObj.id)
+                        const Model = this.getModel();
+                        const result = await Model.findById(idObj.id);
                         if (!result) {
-                            const err = `unable to find task with id ${ idObj.id }`
-                            this.consoleLog.debug(err)
-                            callback(err); return
+                            const err = `unable to find task with id ${idObj.id}`;
+                            this.consoleLog.debug(err);
+                            callback(err);
+                            return;
                         }
-                        doc = result
-                    }
-                        else doc = this._runningTasks[idObj.id].doc
+                        doc = result;
+                    } else doc = this._runningTasks[idObj.id].doc;
                     if (doc.state === 'paused' || doc.state === 'running') {
-                        const err = `unable to delete task with id ${ idObj.id } in ${ doc.state } state`
-                        this.consoleLog.debug(err)
-                        callback(err); return
+                        const err = `unable to delete task with id ${idObj.id} in ${doc.state} state`;
+                        this.consoleLog.debug(err);
+                        callback(err);
+                        return;
                     }
-                    await doc.deleteOne()
-                    this.consoleLog.debug(`client asked to remove task: ${ JSON.stringify(idObj) }`)
-                    callback()
+                    await doc.deleteOne();
+                    this.consoleLog.debug(
+                        `client asked to remove task: ${JSON.stringify(idObj)}`
+                    );
+                    callback();
                 } catch (e) {
-                    const err = JSON.stringify(e)
-                    this.consoleLog.error(err)
-                    callback(err)
+                    const err = JSON.stringify(e);
+                    this.consoleLog.error(err);
+                    callback(err);
                 }
-            })
+            });
 
-            socket.on('subscribeQuery', async (params:QueryParams, callback) => {
-                const Model = this.getModel()
-                const mongoDoc2PersistedWithId = function (doc:SerializedTask & {
-                    _id: any;
-                }) {
-                    const changeMongooseDoc = new Model(doc)
-                    return changeMongooseDoc.toPersistedWithId()
-                }
-
-                const result = {
-                    list: []
-                } as {
-                    subscriptionId?: string
-                    error?: any
-                    list: PersistedTaskWithId[]
-                }
-
-                try {
-                    const docs = await this.io!.realtimeQuery._find(params)
-                    result.list = docs.map( doc => mongoDoc2PersistedWithId(doc))
-                    const subscriptionId = realtimeQuery.subscribe(params, (list, changeDoc, changeList) => {
-                        const changeObj:ChangeQueryDocumentList<PersistedTaskWithId> = {
-                            operationType: changeList.operationType,
-                            position: changeList.position
+            socket.on(
+                'subscribeQuery',
+                async (params: QueryParams, callback) => {
+                    const Model = this.getModel();
+                    const mongoDoc2PersistedWithId = function (
+                        doc: SerializedTask & {
+                            _id: any;
                         }
+                    ) {
+                        const changeMongooseDoc = new Model(doc);
+                        return changeMongooseDoc.toPersistedWithId();
+                    };
 
-                        if (changeList.operationType !== 'multiple') {
-                            if (changeList.doc) changeObj.doc = mongoDoc2PersistedWithId(changeList.doc)
-                            socket.emit('change', changeObj)
-                        }
-                            else socket.emit('list', list.map( doc => mongoDoc2PersistedWithId(doc) ))
-                    })
+                    const result = {
+                        list: [],
+                    } as {
+                        subscriptionId?: string;
+                        error?: any;
+                        list: PersistedTaskWithId[];
+                    };
 
-                    if (!querySubscriptionsBySocket[socket.id]) querySubscriptionsBySocket[socket.id] = [ subscriptionId ]
-                    else querySubscriptionsBySocket[socket.id].push(subscriptionId)
-                    this.consoleLog.debug(`subscribed query (id: ${ subscriptionId }): ${ JSON.stringify(params) }`)
-                    result.subscriptionId = subscriptionId
-                    callback(result)
-                } catch (e) {
-                    this.consoleLog.error(e as string)
-                    result.error = e
-                    callback(result)
+                    try {
+                        const docs = await this.io!.realtimeQuery._find(params);
+                        result.list = docs.map((doc) =>
+                            mongoDoc2PersistedWithId(doc)
+                        );
+                        const subscriptionId = realtimeQuery.subscribe(
+                            params,
+                            (list, changeDoc, changeList) => {
+                                const changeObj: ChangeQueryDocumentList<PersistedTaskWithId> =
+                                    {
+                                        operationType: changeList.operationType,
+                                        position: changeList.position,
+                                    };
+
+                                if (changeList.operationType !== 'multiple') {
+                                    if (changeList.doc)
+                                        changeObj.doc =
+                                            mongoDoc2PersistedWithId(
+                                                changeList.doc
+                                            );
+                                    socket.emit('change', changeObj);
+                                } else
+                                    socket.emit(
+                                        'list',
+                                        list.map((doc) =>
+                                            mongoDoc2PersistedWithId(doc)
+                                        )
+                                    );
+                            }
+                        );
+
+                        if (!querySubscriptionsBySocket[socket.id])
+                            querySubscriptionsBySocket[socket.id] = [
+                                subscriptionId,
+                            ];
+                        else
+                            querySubscriptionsBySocket[socket.id].push(
+                                subscriptionId
+                            );
+                        this.consoleLog.debug(
+                            `subscribed query (id: ${subscriptionId}): ${JSON.stringify(
+                                params
+                            )}`
+                        );
+                        result.subscriptionId = subscriptionId;
+                        callback(result);
+                    } catch (e) {
+                        this.consoleLog.error(e as string);
+                        result.error = e;
+                        callback(result);
+                    }
                 }
-            } )
+            );
         });
     }
 }
 
+export {
+    TaskFactory,
+    ITaskDoc,
+    ITaskModel,
+    Task,
+    clientAddressableAttributes,
+    TaskSignal,
+    TaskActions,
+    TaskActionAvailability,
+    SerializedTask,
+    IPersistedTaskSpecificAttributes,
+    InputTask,
+    IPersistedTask,
+    PersistedTaskWithId,
+};

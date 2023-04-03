@@ -18,11 +18,11 @@ export default class TaskTimeout extends Task {
         inputTask = _.defaults(inputTask, { data: 10000 });
         super(inputTask);
         this.data = inputTask.data;
-        this.consoleLog.generalOptions.prefix = 'TimeoutTask'
+        this.consoleLog.generalOptions.prefix = 'TimeoutTask';
     }
 
     isProgressEmitter(): boolean {
-        return true
+        return true;
     }
 
     _run() {
@@ -31,19 +31,19 @@ export default class TaskTimeout extends Task {
         const task = this as TaskTimeout;
         return new Promise<void>((resolve) => {
             task.consoleLog.print('started');
-            let duration = 0
-            const step = 300
-            const interval = setInterval( () => {
-                duration += step
-                this.emit('progress', { spent: duration, total: this.data })
+            let duration = 0;
+            const step = 300;
+            const interval = setInterval(() => {
+                duration += step;
+                this.emit('progress', { spent: duration, total: this.data });
                 if (duration >= data) {
-                    clearInterval(interval)
+                    clearInterval(interval);
                     task.consoleLog.print('ended');
-                    task._response = 100
+                    task._response = 100;
                     task.setCompleted();
-                    resolve()
+                    resolve();
                 }
-            }, step )
+            }, step);
         });
     }
 }

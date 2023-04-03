@@ -1,29 +1,34 @@
-export const clientAddressableAttributes = ['id', 'versionedTopic', 'data', 'priority']
+export const clientAddressableAttributes = [
+    'id',
+    'versionedTopic',
+    'data',
+    'priority',
+];
 export type TaskSignal = 'pause' | 'stop' | 'resume';
 
 export interface TaskActions {
-    stop?: () => Promise<boolean>
-    pause?: () => Promise<boolean>
-    resume?: () => Promise<boolean>
-    recover?: () => Promise<boolean>
+    stop?: () => Promise<boolean>;
+    pause?: () => Promise<boolean>;
+    resume?: () => Promise<boolean>;
+    recover?: () => Promise<boolean>;
 }
 
 export interface TaskActionAvailability {
-    stop: boolean
-    pause: boolean
-    resume: boolean
-    recover: boolean
+    stop: boolean;
+    pause: boolean;
+    resume: boolean;
+    recover: boolean;
 }
 
 export interface SerializedTask {
-    id: string
-    versionedTopic: string
-    state: 'to do' | 'running' | 'paused' | 'completed'
-    data?: any
-    response?: any
-    deleteAt?: string
-    waitUntil?: string
-    availableActions: TaskActionAvailability
+    id: string;
+    versionedTopic: string;
+    state: 'to do' | 'running' | 'paused' | 'completed';
+    data?: any;
+    response?: any;
+    deleteAt?: string;
+    waitUntil?: string;
+    availableActions: TaskActionAvailability;
 }
 
 export interface IPersistedTaskSpecificAttributes {
@@ -32,16 +37,17 @@ export interface IPersistedTaskSpecificAttributes {
     worker?: string;
     createdAt: string;
     updatedAt: string;
-    availableActions: TaskActionAvailability
-    publicUrl?: string
+    availableActions: TaskActionAvailability;
+    publicUrl?: string;
 }
 
-export interface InputTask extends Partial<Omit<SerializedTask, 'availableActions'>> {}
+export interface InputTask
+    extends Partial<Omit<SerializedTask, 'availableActions'>> {}
 
 export interface IPersistedTask
     extends IPersistedTaskSpecificAttributes,
-    Omit<SerializedTask, 'id'> {}
+        Omit<SerializedTask, 'id'> {}
 
 export interface PersistedTaskWithId extends IPersistedTask {
-    id: string
+    id: string;
 }
