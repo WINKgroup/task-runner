@@ -11,6 +11,7 @@
     "test": "npx jest",
     "clean": "rm -rf dist",
     "build": "npm run clean && tsc",
+    "prepare": "npm run build",
     "playground": "ts-node-dev playground/server.ts",
     "format": "prettier --write 'src/**/*.ts' 'test/**/*.ts' 'playground/**/*.ts'",
     "postversion": "git push && git push --tags && npm publish"
