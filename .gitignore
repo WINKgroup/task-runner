@@ -4,3 +4,4 @@ playground/test.ts
 dist/**/*
 test/config.json
 playground/config.json
+test/test.ts

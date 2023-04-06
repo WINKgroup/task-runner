@@ -1,9 +1,10 @@
-import fs from 'fs';
-import TaskRunner from '../src/index';
-import Webserver from '@winkgroup/webserver';
-import path from 'path';
-import { TaskFactoryTimeout } from './timeoutTask';
 import ConsoleLog, { LogLevel } from '@winkgroup/console-log';
+import Webserver from '@winkgroup/webserver';
+import fs from 'fs';
+import mongoose from 'mongoose';
+import path from 'path';
+import TaskRunner from '../src/index';
+import { TaskFactoryTimeout } from './timeoutTask';
 
 const factory = new TaskFactoryTimeout();
 const webserver = new Webserver({ name: 'Demo Server', hasSocket: true });
@@ -12,35 +13,40 @@ webserver.app.get('/', (req, res) =>
     res.sendFile(path.join(__dirname, './index.html'))
 );
 
+const configStr = fs.readFileSync('playground/config.json', 'utf-8');
+const config = JSON.parse(configStr);
+mongoose.connect(config.dbUri);
+const TaskModel = TaskRunner.getModelFromParams(
+    mongoose,
+    config.collectionName
+);
+
 function setupRunners() {
-    const configStr = fs.readFileSync('playground/config.json', 'utf-8');
-    const config = JSON.parse(configStr);
     const runner1 = new TaskRunner({
         instance: 'runner1',
-        dbUri: config.dbUri,
-        collectionName: config.collectionName,
+        Model: TaskModel,
         io: {
             publicUrl: '',
             server: ioApp.of('tasks1'),
         },
         consoleLog: new ConsoleLog({
-            verbosity: LogLevel.DEBUG,
+            verbosity: LogLevel.INFO,
             prefix: 'TaskRunner1',
         }),
     });
     runner1.registerFactory(factory);
-    runner1.erase(false);
+    runner1.erase();
 
     const runner2 = new TaskRunner({
-        dbUri: config.dbUri,
+        Model: TaskModel,
         instance: 'runner2',
-        collectionName: config.collectionName,
+        startActive: false,
         io: {
             publicUrl: 'http://127.0.0.1:8080/tasks2',
             server: ioApp.of('tasks2'),
         },
         consoleLog: new ConsoleLog({
-            verbosity: LogLevel.DEBUG,
+            verbosity: LogLevel.INFO,
             prefix: 'TaskRunner2',
         }),
     });

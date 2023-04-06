@@ -1,6 +1,6 @@
 import ConsoleLog from '@winkgroup/console-log';
 import Cron from '@winkgroup/cron';
-import Db, { QueryParams, RealtimeQuery } from '@winkgroup/db-mongo';
+import MongoHelper, { QueryParams, RealtimeQuery } from '@winkgroup/db-mongo';
 import { ChangeQueryDocumentList } from '@winkgroup/db-mongo/dist/queryCache';
 import _ from 'lodash';
 import { Namespace, Server as IoServer } from 'socket.io';
@@ -18,20 +18,22 @@ import {
 import TaskFactory from './factory';
 import { ITaskDoc, ITaskModel, schema } from './model';
 import Task from './task';
+import mongoose, { Connection } from 'mongoose';
+
+export interface InputTaskRunnerIo {
+    publicUrl: string;
+    server: Namespace | IoServer;
+}
 
 export interface InputTaskRunner {
-    dbUri: string;
-    collectionName: string;
+    Model: ITaskModel;
     instance?: string;
     everySeconds?: number;
     topicFactories?: { [topic: string]: TaskFactory };
     maxRunningTasks?: number;
     startActive?: boolean;
     consoleLog?: ConsoleLog;
-    io?: {
-        publicUrl: string;
-        server: Namespace | IoServer;
-    };
+    io?: InputTaskRunnerIo;
     housekeeperEverySeconds?: number;
 }
 
@@ -42,14 +44,13 @@ export interface TaskCouple {
 
 export default class TaskRunner {
     instance: string;
-    dbUri: string;
-    collectionName: string;
+    Model: ITaskModel;
     consoleLog: ConsoleLog;
 
     versionedTopicFactories = {} as { [versionedTopic: string]: TaskFactory };
     maxRunningTasks: number;
 
-    readonly io?: {
+    protected io?: {
         publicUrl: string;
         server: Namespace | IoServer;
         realtimeQuery: RealtimeQuery<SerializedTask & { _id: any }>;
@@ -74,26 +75,12 @@ export default class TaskRunner {
         });
 
         this.instance = options.instance;
-        this.dbUri = options.dbUri;
-        this.collectionName = options.collectionName;
+        this.Model = options.Model;
         this.consoleLog = options.consoleLog;
 
         this.maxRunningTasks = options.maxRunningTasks;
 
-        if (options.io) {
-            const realtimeQuery = new RealtimeQuery<
-                SerializedTask & { _id: any }
-            >({
-                dbUri: this.dbUri,
-                collectionName: this.collectionName,
-            });
-            this.io = {
-                ...options.io,
-                realtimeQuery: realtimeQuery,
-                querySubscriptionsBySocket: {},
-            };
-            this.setIo();
-        }
+        if (options.io) this.setIo(options.io);
 
         this.cronObj = new Cron(options.everySeconds, options.consoleLog);
         this.houseKeeperCronObj = new Cron(
@@ -119,14 +106,6 @@ export default class TaskRunner {
         return Object.keys(this._runningTasks).length;
     }
 
-    getModel() {
-        const db = Db.get(this.dbUri);
-        if (db.models[this.collectionName])
-            return db.models[this.collectionName] as ITaskModel;
-
-        return db.model<ITaskDoc, ITaskModel>(this.collectionName, schema);
-    }
-
     unpersistTask(persistedTask: PersistedTaskWithId) {
         const factory =
             this.versionedTopicFactories[persistedTask.versionedTopic];
@@ -139,8 +118,7 @@ export default class TaskRunner {
     }
 
     async getPersistedTaskById(id: string) {
-        const TaskModel = this.getModel();
-        const doc = await TaskModel.findById(id);
+        const doc = await this.Model.findById(id);
         if (!doc) return null;
         return doc.toPersistedWithId();
     }
@@ -170,8 +148,7 @@ export default class TaskRunner {
             if (errors.length > 0) return errors[0];
         }
 
-        const TaskModel = this.getModel();
-        const doc = TaskModel.createEmpty(versionedTopic);
+        const doc = this.Model.createEmpty(versionedTopic);
         doc.updateData(attributes);
         try {
             await doc.save();
@@ -182,18 +159,15 @@ export default class TaskRunner {
         }
     }
 
-    async erase(withS = true) {
-        const db = Db.get(this.dbUri);
-        await db.dropCollection(
-            withS ? this.collectionName + 's' : this.collectionName
-        );
+    async erase() {
+        const db = await MongoHelper.waitForMongoDbConnected(this.Model.db);
+        await db.dropCollection(this.Model.collection.name);
         this.consoleLog.print('tasks erased');
     }
 
     async start() {
         const needsRun = !this._active;
         this._active = true;
-        if (this.io) await this.io.realtimeQuery.start();
         if (needsRun) this.run();
     }
 
@@ -255,8 +229,7 @@ export default class TaskRunner {
         doc.updatedAt = new Date().toISOString();
         try {
             await doc.save();
-            const Model = this.getModel();
-            const newDoc = await Model.findById(doc._id);
+            const newDoc = await this.Model.findById(doc._id);
             if (!newDoc || newDoc.worker !== this.instance) {
                 if (newDoc) doc.worker = newDoc.worker;
                 this.consoleLog.warn(
@@ -334,10 +307,9 @@ export default class TaskRunner {
     }
 
     async loadTasks(tasksToLoad: number) {
-        const Model = this.getModel();
         const queryObj = this.loadTasksQueryObj();
 
-        let query = Model.find(queryObj).sort('-priority');
+        let query = this.Model.find(queryObj).sort('-priority');
         if (tasksToLoad > 0) query = query.limit(tasksToLoad);
         const docs = await query.exec();
         this.consoleLog.debug(`${docs.length} tasks loaded`);
@@ -396,8 +368,7 @@ export default class TaskRunner {
         const queryObj: { [key: string]: any } = {
             versionedTopic: { $in: topics },
         };
-        const Model = this.getModel();
-        const docs = await Model.find({
+        const docs = await this.Model.find({
             queryObj: queryObj,
         });
         for (const doc of docs) delete factoryMap[doc.versionedTopic];
@@ -408,7 +379,7 @@ export default class TaskRunner {
             );
             Promise.all(
                 cronPersistedTasks.map((cronPersistedTask) => {
-                    const doc = new Model(cronPersistedTask);
+                    const doc = new this.Model(cronPersistedTask);
                     return doc.save();
                 })
             );
@@ -416,9 +387,8 @@ export default class TaskRunner {
     }
 
     async deletePersistedTasksMarked() {
-        const Model = this.getModel();
         const now = new Date().toISOString();
-        const result = await Model.deleteMany({ deleteAt: { $lt: now } });
+        const result = await this.Model.deleteMany({ deleteAt: { $lt: now } });
         this.consoleLog.debug(`${result.deletedCount} tasks deleted`);
     }
 
@@ -437,15 +407,31 @@ export default class TaskRunner {
         }
     }
 
-    setIo() {
-        if (!this.io) return;
-        const { server, realtimeQuery, querySubscriptionsBySocket } = this.io;
+    async setIo(options: InputTaskRunnerIo) {
+        const server = options.server;
+        const querySubscriptionsBySocket = {} as {
+            [socketId: string]: string[];
+        };
+        const db = await MongoHelper.waitForMongoDbConnected(this.Model.db);
+        const realtimeQuery = new RealtimeQuery<SerializedTask & { _id: any }>({
+            db: db,
+            collectionName: this.Model.collection.name,
+        });
+
+        this.io = {
+            ...options,
+            realtimeQuery: realtimeQuery,
+            querySubscriptionsBySocket: {},
+        };
 
         server.use((socket, next) => {
             const token = socket.handshake.auth.token;
             if (1 !== 1) next(new Error('access denied'));
             else next();
         });
+
+        const Model = this.Model;
+        const io = this.io;
 
         server.on('connection', (socket) => {
             this.consoleLog.debug('client connected');
@@ -483,8 +469,7 @@ export default class TaskRunner {
                 try {
                     let doc: ITaskDoc;
                     if (!this._runningTasks[idObj.id]) {
-                        const Model = this.getModel();
-                        const result = await Model.findById(idObj.id);
+                        const result = await this.Model.findById(idObj.id);
                         if (!result) {
                             const err = `unable to find task with id ${idObj.id}`;
                             this.consoleLog.debug(err);
@@ -514,7 +499,6 @@ export default class TaskRunner {
             socket.on(
                 'subscribeQuery',
                 async (params: QueryParams, callback) => {
-                    const Model = this.getModel();
                     const mongoDoc2PersistedWithId = function (
                         doc: SerializedTask & {
                             _id: any;
@@ -585,7 +569,19 @@ export default class TaskRunner {
                     }
                 }
             );
+
+            io.realtimeQuery.start();
         });
+    }
+
+    static getModelFromParams(
+        conn: Connection | typeof mongoose,
+        collectionName: string
+    ) {
+        if (conn.models[collectionName])
+            return conn.models[collectionName] as ITaskModel;
+
+        return conn.model<ITaskDoc, ITaskModel>(collectionName, schema);
     }
 }
 
@@ -603,4 +599,5 @@ export {
     InputTask,
     IPersistedTask,
     PersistedTaskWithId,
+    schema,
 };
