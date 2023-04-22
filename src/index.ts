@@ -576,7 +576,7 @@ export default class TaskRunner {
 
     static getModelFromParams(
         conn: Connection | typeof mongoose,
-        collectionName: string
+        collectionName = 'tasks'
     ) {
         if (conn.models[collectionName])
             return conn.models[collectionName] as ITaskModel;
