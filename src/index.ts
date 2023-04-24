@@ -25,7 +25,6 @@ export interface InputTaskRunnerIo {
     server: Namespace | IoServer;
 }
 
-
 export interface InputTaskRunner {
     Model: ITaskModel;
     instance?: string;
@@ -393,6 +392,29 @@ export default class TaskRunner {
         this.consoleLog.debug(`${result.deletedCount} tasks deleted`);
     }
 
+    async taskRecovery() {
+        const old = Cron.comeBackIn(-8 * 3600 * 1000);
+        const topics = Object.keys(this.versionedTopicFactories);
+        const list = await this.Model.find({
+            versionedTopic: { $in: topics },
+            updatedAt: { $lt: old },
+            'availableActions.recover': true,
+        });
+        this.consoleLog.debug(
+            `found ${list.length} tasks that can be recovered`
+        );
+        return Promise.all(
+            list.map(async (doc) => {
+                const task = this.unpersistTask(doc.toPersistedWithId());
+                const result = await task.recover();
+                if (!result)
+                    this.consoleLog.debug(
+                        `unable to recover task "${task.id}"`
+                    );
+            })
+        );
+    }
+
     async cron() {
         if (this.cronObj.tryStartRun()) {
             await this.run();
@@ -403,6 +425,7 @@ export default class TaskRunner {
             await Promise.all([
                 this.deletePersistedTasksMarked(),
                 this.setCronTasks(),
+                this.taskRecovery(),
             ]);
             this.houseKeeperCronObj.runCompleted();
         }

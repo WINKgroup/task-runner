@@ -115,6 +115,7 @@ export default abstract class Task extends EventEmitter {
         if (actionFn) {
             const result = await actionFn();
             if (result) this.emit('updated');
+            return result;
         } else {
             this.consoleLog.warn(
                 `action "${actionName}" called, but not defined`
