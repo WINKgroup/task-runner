@@ -401,8 +401,8 @@ export default class TaskRunner {
 
         if (this.houseKeeperCronObj.tryStartRun()) {
             await Promise.all([
-                this.deletePersistedTasksMarked,
-                this.setCronTasks,
+                this.deletePersistedTasksMarked(),
+                this.setCronTasks(),
             ]);
             this.houseKeeperCronObj.runCompleted();
         }
