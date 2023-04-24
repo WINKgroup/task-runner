@@ -31,8 +31,7 @@ export const schema = new mongoose.Schema<ITaskDoc, ITaskModel>({
     availableActions: {
         stop: Boolean,
         pause: Boolean,
-        resume: Boolean,
-        recover: Boolean,
+        resume: Boolean
     },
 });
 

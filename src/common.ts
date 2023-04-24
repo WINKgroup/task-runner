@@ -10,7 +10,6 @@ export interface TaskActions {
     stop?: () => Promise<boolean>;
     pause?: () => Promise<boolean>;
     resume?: () => Promise<boolean>;
-    recover?: () => Promise<boolean>;
 }
 
 export interface TaskActionAvailability {
