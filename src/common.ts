@@ -17,7 +17,6 @@ export interface TaskActionAvailability {
     stop: boolean;
     pause: boolean;
     resume: boolean;
-    recover: boolean;
 }
 
 export interface SerializedTask {

@@ -93,7 +93,7 @@ export default abstract class Task extends EventEmitter {
         }
     }
 
-    hasAction(actionName: 'stop' | 'resume' | 'recover' | 'pause') {
+    hasAction(actionName: 'stop' | 'resume' | 'pause') {
         return !!this._actions[actionName];
     }
 
@@ -101,16 +101,13 @@ export default abstract class Task extends EventEmitter {
         const list: TaskActionAvailability = {
             stop: !!this._actions['stop'],
             resume: !!this._actions['resume'],
-            recover: !!this._actions['recover'],
             pause: !!this._actions['pause'],
         };
 
         return list;
     }
 
-    protected async action(
-        actionName: 'stop' | 'resume' | 'recover' | 'pause'
-    ) {
+    protected async action(actionName: 'stop' | 'resume' | 'pause') {
         const actionFn = this._actions[actionName];
         if (actionFn) {
             const result = await actionFn();
@@ -135,10 +132,6 @@ export default abstract class Task extends EventEmitter {
 
     async resume() {
         if (this.state === 'paused') await this.action('resume');
-    }
-
-    recover() {
-        return this.action('recover');
     }
 
     dataToPersist(inputOptions?: Partial<IPersistedTaskSpecificAttributes>) {
