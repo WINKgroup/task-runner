@@ -1,17 +1,26 @@
-import ConsoleLog, { LogLevel } from '@winkgroup/console-log';
-import Webserver from '@winkgroup/webserver';
+import ConsoleLog, { ConsoleLogLevel } from '@winkgroup/console-log';
+import { prepareApp } from '@winkgroup/webserver';
 import fs from 'fs';
 import mongoose from 'mongoose';
 import path from 'path';
 import TaskRunner from '../src/index';
 import { TaskFactoryTimeout } from './timeoutTask';
+import express from 'express';
+import http from 'http';
+import { Server as IOServer } from 'socket.io';
 
 const factory = new TaskFactoryTimeout();
-const webserver = new Webserver({ name: 'Demo Server', hasSocket: true });
-const ioApp = webserver.ioApp!;
-webserver.app.get('/', (req, res) =>
-    res.sendFile(path.join(__dirname, './index.html'))
-);
+const app = express();
+prepareApp(app, 'Demo Server');
+
+const server = http.createServer(app);
+const ioApp = new IOServer(server, {
+    cors: {
+        origin: true,
+    },
+});
+
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, './index.html')));
 
 const configStr = fs.readFileSync('playground/config.json', 'utf-8');
 const config = JSON.parse(configStr);
@@ -30,7 +39,7 @@ function setupRunners() {
             server: ioApp.of('tasks1'),
         },
         consoleLog: new ConsoleLog({
-            verbosity: LogLevel.INFO,
+            verbosity: ConsoleLogLevel.INFO,
             prefix: 'TaskRunner1',
         }),
     });
@@ -46,7 +55,7 @@ function setupRunners() {
             server: ioApp.of('tasks2'),
         },
         consoleLog: new ConsoleLog({
-            verbosity: LogLevel.INFO,
+            verbosity: ConsoleLogLevel.INFO,
             prefix: 'TaskRunner2',
         }),
     });
@@ -65,4 +74,5 @@ setInterval(() => {
 console.log(
     'VISIT http://127.0.0.1:8080/ and open your browser console log to test it!'
 );
-webserver.listen();
+
+server.listen();
