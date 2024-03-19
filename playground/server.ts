@@ -49,7 +49,7 @@ function setupRunners() {
     const runner2 = new TaskRunner({
         Model: TaskModel,
         instance: 'runner2',
-        startActive: false,
+        startActive: true,
         io: {
             publicUrl: 'http://127.0.0.1:8080/tasks2',
             server: ioApp.of('tasks2'),
@@ -75,4 +75,4 @@ console.log(
     'VISIT http://127.0.0.1:8080/ and open your browser console log to test it!'
 );
 
-server.listen();
+server.listen(8080);

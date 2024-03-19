@@ -2,7 +2,6 @@ yarn.lock
 package-lock.json
 playground/test.ts
 dist
-test/config.json
 playground/config.json
-test/test.ts
 node_modules
+.DS_Store
