@@ -261,6 +261,7 @@ export default class TaskRunner {
             return;
         }
 
+        this._runningTasks[task.id] = taskCouple
         task.consoleLog.generalOptions.verbosity =
             this.consoleLog.generalOptions.verbosity;
 
