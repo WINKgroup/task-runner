@@ -29,7 +29,7 @@ export interface InputTaskRunner {
     Model: ITaskModel;
     instance?: string;
     everySeconds?: number;
-    topicFactories?: { [topic: string]: TaskFactory };
+    versionedTopicFactories?: { [topic: string]: TaskFactory };
     maxRunningTasks?: number;
     startActive?: boolean;
     consoleLog?: ConsoleLog;
@@ -79,6 +79,11 @@ export default class TaskRunner {
         this.consoleLog = options.consoleLog;
 
         this.maxRunningTasks = options.maxRunningTasks;
+
+        if (options.versionedTopicFactories) {
+            for (const versionedTopic in options.versionedTopicFactories)
+                this.registerFactory(options.versionedTopicFactories[ versionedTopic ], [ versionedTopic ])
+        }
 
         if (options.io) this.setIo(options.io);
 
