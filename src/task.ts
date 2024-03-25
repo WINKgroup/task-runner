@@ -83,6 +83,7 @@ export default abstract class Task extends EventEmitter {
                 this._response = undefined;
                 this.emit('updated');
                 await this._run();
+                if (this._state === 'running') this._state = 'to do'
                 this.emit('updated');
                 break;
             case 'paused':
