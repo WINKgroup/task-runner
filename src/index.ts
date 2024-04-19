@@ -72,8 +72,6 @@ export default class TaskRunner {
             everySeconds: 0,
             maxRunningTasks: 5,
             startActive: true,
-            cronObj: new Cron(0),
-            housekeeperCronObj: new Cron(10 * 60),
             taskRecoverySecondsInThePast: 8 * 3600,
         });
 
