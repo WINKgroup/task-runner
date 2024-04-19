@@ -16,7 +16,7 @@ import {
     TaskSignal,
 } from './common';
 import TaskFactory from './factory';
-import { ITaskDoc, ITaskModel, schema } from './model';
+import { TaskDoc, TaskModel, schema } from './model';
 import Task from './task';
 import mongoose, { Connection } from 'mongoose';
 
@@ -26,7 +26,7 @@ export interface InputTaskRunnerIo {
 }
 
 export interface InputTaskRunner {
-    Model: ITaskModel;
+    Model: TaskModel;
     instance?: string;
     cronObj?: Cron;
     housekeeperCronObj?: Cron;
@@ -40,12 +40,12 @@ export interface InputTaskRunner {
 
 export interface TaskCouple {
     task: Task;
-    doc: ITaskDoc;
+    doc: TaskDoc;
 }
 
 export default class TaskRunner {
     instance: string;
-    Model: ITaskModel;
+    Model: TaskModel;
     consoleLog: ConsoleLog;
 
     versionedTopicFactories = {} as { [versionedTopic: string]: TaskFactory };
@@ -237,7 +237,7 @@ export default class TaskRunner {
         return factory;
     }
 
-    async lockTask(doc: ITaskDoc) {
+    async lockTask(doc: TaskDoc) {
         if (doc.worker) {
             this.consoleLog.warn(
                 `task ${doc.id} already locked at ${doc.worker}, not locking it again`,
@@ -544,7 +544,7 @@ export default class TaskRunner {
 
             socket.on('remove', async (idObj: { id: string }, callback) => {
                 try {
-                    let doc: ITaskDoc;
+                    let doc: TaskDoc;
                     if (!this._runningTasks[idObj.id]) {
                         const result = await this.Model.findById(idObj.id);
                         if (!result) {
@@ -656,16 +656,16 @@ export default class TaskRunner {
         collectionName = 'tasks',
     ) {
         if (conn.models[collectionName])
-            return conn.models[collectionName] as ITaskModel;
+            return conn.models[collectionName] as TaskModel;
 
-        return conn.model<ITaskDoc, ITaskModel>(collectionName, schema);
+        return conn.model<TaskDoc, TaskModel>(collectionName, schema);
     }
 }
 
 export {
     TaskFactory,
-    ITaskDoc,
-    ITaskModel,
+    TaskDoc,
+    TaskModel,
     Task,
     clientAddressableAttributes,
     TaskSignal,

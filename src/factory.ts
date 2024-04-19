@@ -1,10 +1,10 @@
 import { IPersistedTask, PersistedTaskWithId } from './common';
-import { ITaskDoc } from './model';
+import { TaskDoc } from './model';
 import Task from './task';
 
 export default abstract class TaskFactory {
     cronVersionedTopics = [] as string[];
-    recover?: (taskDoc: ITaskDoc) => Promise<boolean>;
+    recover?: (taskDoc: TaskDoc) => Promise<boolean>;
 
     abstract unpersist(taskPersisted: PersistedTaskWithId): Task;
 
