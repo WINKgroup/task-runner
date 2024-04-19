@@ -28,13 +28,14 @@ export interface InputTaskRunnerIo {
 export interface InputTaskRunner {
     Model: ITaskModel;
     instance?: string;
-    everySeconds?: number;
+    cronObj?: Cron
+    housekeeperCronObj?: Cron;
     versionedTopicFactories?: { [topic: string]: TaskFactory };
     maxRunningTasks?: number;
     startActive?: boolean;
     consoleLog?: ConsoleLog;
     io?: InputTaskRunnerIo;
-    housekeeperEverySeconds?: number;
+    taskRecoverySecondsInThePast?: number
 }
 
 export interface TaskCouple {
@@ -49,6 +50,7 @@ export default class TaskRunner {
 
     versionedTopicFactories = {} as { [versionedTopic: string]: TaskFactory };
     maxRunningTasks: number;
+    taskRecoverySecondsInThePast: number
 
     protected io?: {
         publicUrl: string;
@@ -71,14 +73,24 @@ export default class TaskRunner {
             maxRunningTasks: 5,
             startActive: true,
             consoleLog: new ConsoleLog({ prefix: 'Task Runner' }),
-            housekeeperEverySeconds: 10 * 60,
+            cronObj: new Cron(0),
+            housekeeperCronObj: new Cron(10 * 60),
+            taskRecoverySecondsInThePast: 8 * 3600
         });
 
         this.instance = options.instance;
         this.Model = options.Model;
         this.consoleLog = options.consoleLog;
+        this.taskRecoverySecondsInThePast = options.taskRecoverySecondsInThePast
 
         this.maxRunningTasks = options.maxRunningTasks;
+
+        this.cronObj = options.cronObj ? options.cronObj : new Cron(0, {
+            consoleLog: this.consoleLog
+        })
+        this.houseKeeperCronObj = options.housekeeperCronObj ? options.housekeeperCronObj : new Cron(10 * 60, {
+            consoleLog: this.consoleLog
+        })
 
         if (options.versionedTopicFactories) {
             for (const versionedTopic in options.versionedTopicFactories)
@@ -86,12 +98,6 @@ export default class TaskRunner {
         }
 
         if (options.io) this.setIo(options.io);
-
-        this.cronObj = new Cron(options.everySeconds, options.consoleLog);
-        this.houseKeeperCronObj = new Cron(
-            options.housekeeperEverySeconds,
-            options.consoleLog
-        );
 
         this._active = false;
         if (options.startActive) process.nextTick(() => this.start());
@@ -399,7 +405,7 @@ export default class TaskRunner {
     }
 
     async taskRecovery() {
-        const old = Cron.comeBackIn(-8 * 3600 * 1000);
+        const old = Cron.comeBackIn(-this.taskRecoverySecondsInThePast * 1000);
         const topicsOfFactoriesWithRecoverMethod = _.toPairs(
             this.versionedTopicFactories
         )
@@ -422,20 +428,17 @@ export default class TaskRunner {
         );
     }
 
-    async cron() {
-        if (this.cronObj.tryStartRun()) {
-            await this.run();
-            this.cronObj.runCompleted();
-        }
-
-        if (this.houseKeeperCronObj.tryStartRun()) {
-            await Promise.all([
-                this.deletePersistedTasksMarked(),
-                this.setCronTasks(),
-                this.taskRecovery(),
-            ]);
-            this.houseKeeperCronObj.runCompleted();
-        }
+    cron() {
+        return Promise.all([
+            this.cronObj.run(() => this.run()),
+            this.houseKeeperCronObj.run(async () => {
+                await Promise.all([
+                    this.deletePersistedTasksMarked(),
+                    this.setCronTasks(),
+                    this.taskRecovery(),
+                ])}
+            )
+        ])    
     }
 
     async setIo(options: InputTaskRunnerIo) {
