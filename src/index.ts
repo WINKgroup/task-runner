@@ -398,8 +398,9 @@ export default class TaskRunner {
             }
         } catch (e) {
             // verify there aren't any running tasks before sending the expection
+            const previousActiveState = this._active
             await this.stop();
-            this._active = true;
+            this._active = previousActiveState;
             throw e;
         }
     }
