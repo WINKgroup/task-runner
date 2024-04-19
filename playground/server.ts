@@ -27,7 +27,7 @@ const config = JSON.parse(configStr);
 mongoose.connect(config.dbUri);
 const TaskModel = TaskRunner.getModelFromParams(
     mongoose,
-    config.collectionName
+    config.collectionName,
 );
 
 function setupRunners() {
@@ -72,7 +72,7 @@ setInterval(() => {
 }, 1500);
 
 console.log(
-    'VISIT http://127.0.0.1:8080/ and open your browser console log to test it!'
+    'VISIT http://127.0.0.1:8080/ and open your browser console log to test it!',
 );
 
 server.listen(8080);

@@ -9,14 +9,14 @@ export default abstract class TaskFactory {
     abstract unpersist(taskPersisted: PersistedTaskWithId): Task;
 
     validateClientAddressableAttributes(
-        attributes: Partial<PersistedTaskWithId>
+        attributes: Partial<PersistedTaskWithId>,
     ) {
         const errors = [] as string[];
         return errors;
     }
 
     async createCronPersistedTasks(
-        cronVersionedTopic: string
+        cronVersionedTopic: string,
     ): Promise<IPersistedTask[]> {
         throw new Error('not implemented');
     }

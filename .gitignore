@@ -2,7 +2,7 @@ yarn.lock
 package-lock.json
 playground/test.ts
 dist
-playground/config.json
+*/config.json
 node_modules
 .DS_Store
 pnpm-lock.yaml

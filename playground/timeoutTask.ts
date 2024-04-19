@@ -3,9 +3,13 @@ import { InputTask, IPersistedTask } from '../src/common';
 import TaskFactory from '../src/factory';
 import Task from '../src/task';
 
+export interface InputTaskTimeout extends InputTask {
+    data: number; // timeout in millisecs
+}
+
 export class TaskFactoryTimeout extends TaskFactory {
     unpersist(taskPersisted: IPersistedTask) {
-        return new TaskTimeout(taskPersisted);
+        return new TaskTimeout(taskPersisted as InputTaskTimeout);
     }
 }
 
@@ -14,7 +18,7 @@ export default class TaskTimeout extends Task {
 
     timeoutObj?: NodeJS.Timeout;
 
-    constructor(inputTask: InputTask) {
+    constructor(inputTask: InputTaskTimeout) {
         inputTask = _.defaults(inputTask, { data: 10000 });
         super(inputTask);
         this.data = inputTask.data;

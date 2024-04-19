@@ -84,13 +84,14 @@ export default abstract class Task extends EventEmitter {
                 this.emit('updated');
                 try {
                     await this._run();
-                } catch (e) {
-                    if (this._state === 'running') this._state = 'to do'
+                    if (this._state === 'running') this._state = 'to do';
                     this.emit('updated');
-                    throw e
+                } catch (e) {
+                    if (this._state === 'running') this._state = 'to do';
+                    this.setErrorOnException(e);
+                    this.emit('updated');
+                    throw e;
                 }
-                if (this._state === 'running') this._state = 'to do'
-                this.emit('updated');
                 break;
             case 'paused':
                 this.consoleLog.warn('no run: paused, use resume instead');
@@ -122,7 +123,7 @@ export default abstract class Task extends EventEmitter {
             return result;
         } else {
             this.consoleLog.warn(
-                `action "${actionName}" called, but not defined`
+                `action "${actionName}" called, but not defined`,
             );
             return false;
         }
@@ -181,12 +182,16 @@ export default abstract class Task extends EventEmitter {
             const resolver = () => {
                 if (this._state === 'running' || this._state === 'paused')
                     return;
-                this.off('update', resolver);
+                this.off('updated', resolver);
                 resolve();
             };
 
-            this.on('update', resolver);
+            this.on('updated', resolver);
         });
+    }
+
+    protected setErrorOnException(e: unknown) {
+        this._response = e;
     }
 
     protected static _serializeAny(obj?: any) {

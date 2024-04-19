@@ -28,14 +28,14 @@ export interface InputTaskRunnerIo {
 export interface InputTaskRunner {
     Model: ITaskModel;
     instance?: string;
-    cronObj?: Cron
+    cronObj?: Cron;
     housekeeperCronObj?: Cron;
     versionedTopicFactories?: { [topic: string]: TaskFactory };
     maxRunningTasks?: number;
     startActive?: boolean;
     consoleLog?: ConsoleLog;
     io?: InputTaskRunnerIo;
-    taskRecoverySecondsInThePast?: number
+    taskRecoverySecondsInThePast?: number;
 }
 
 export interface TaskCouple {
@@ -50,7 +50,7 @@ export default class TaskRunner {
 
     versionedTopicFactories = {} as { [versionedTopic: string]: TaskFactory };
     maxRunningTasks: number;
-    taskRecoverySecondsInThePast: number
+    taskRecoverySecondsInThePast: number;
 
     protected io?: {
         publicUrl: string;
@@ -68,33 +68,42 @@ export default class TaskRunner {
 
     constructor(input: InputTaskRunner) {
         const options = _.defaults(input, {
-            instance: 'default',
+            instance: 'Task Runner',
             everySeconds: 0,
             maxRunningTasks: 5,
             startActive: true,
-            consoleLog: new ConsoleLog({ prefix: 'Task Runner' }),
             cronObj: new Cron(0),
             housekeeperCronObj: new Cron(10 * 60),
-            taskRecoverySecondsInThePast: 8 * 3600
+            taskRecoverySecondsInThePast: 8 * 3600,
         });
 
         this.instance = options.instance;
         this.Model = options.Model;
-        this.consoleLog = options.consoleLog;
-        this.taskRecoverySecondsInThePast = options.taskRecoverySecondsInThePast
+        this.consoleLog = options.consoleLog
+            ? options.consoleLog
+            : new ConsoleLog({ prefix: this.instance });
+        this.taskRecoverySecondsInThePast =
+            options.taskRecoverySecondsInThePast;
 
         this.maxRunningTasks = options.maxRunningTasks;
 
-        this.cronObj = options.cronObj ? options.cronObj : new Cron(0, {
-            consoleLog: this.consoleLog
-        })
-        this.houseKeeperCronObj = options.housekeeperCronObj ? options.housekeeperCronObj : new Cron(10 * 60, {
-            consoleLog: this.consoleLog
-        })
+        this.cronObj = options.cronObj
+            ? options.cronObj
+            : new Cron(0, {
+                  consoleLog: this.consoleLog,
+              });
+        this.houseKeeperCronObj = options.housekeeperCronObj
+            ? options.housekeeperCronObj
+            : new Cron(10 * 60, {
+                  consoleLog: this.consoleLog,
+              });
 
         if (options.versionedTopicFactories) {
             for (const versionedTopic in options.versionedTopicFactories)
-                this.registerFactory(options.versionedTopicFactories[ versionedTopic ], [ versionedTopic ])
+                this.registerFactory(
+                    options.versionedTopicFactories[versionedTopic],
+                    [versionedTopic],
+                );
         }
 
         if (options.io) this.setIo(options.io);
@@ -122,7 +131,7 @@ export default class TaskRunner {
             this.versionedTopicFactories[persistedTask.versionedTopic];
         if (!factory)
             throw new Error(
-                `Factory for topic "${persistedTask.versionedTopic}" not found`
+                `Factory for topic "${persistedTask.versionedTopic}" not found`,
             );
 
         return factory.unpersist(persistedTask);
@@ -141,7 +150,7 @@ export default class TaskRunner {
     }
 
     async addTaskFromClientAddressableAttributes(
-        attributes: Partial<IPersistedTask>
+        attributes: Partial<IPersistedTask>,
     ) {
         attributes = _.pick(attributes, clientAddressableAttributes);
         attributes = _.omit(attributes, 'id');
@@ -149,7 +158,7 @@ export default class TaskRunner {
         const versionedTopic = attributes.versionedTopic;
         if (!versionedTopic || !this.versionedTopicFactories[versionedTopic]) {
             this.consoleLog.error(
-                `not registered versionedTopic "${versionedTopic}" in addTaskFromClientAddressableAttributes`
+                `not registered versionedTopic "${versionedTopic}" in addTaskFromClientAddressableAttributes`,
             );
             return 'not registered versionedTopic';
         } else {
@@ -190,7 +199,7 @@ export default class TaskRunner {
                 const task = this._runningTasks[id].task;
                 if (force && task.hasAction('stop')) return task.stop();
                 else return task.waitUntilStop();
-            })
+            }),
         );
     }
 
@@ -214,7 +223,7 @@ export default class TaskRunner {
         for (const versionedTopic of versionedTopics) {
             this.versionedTopicFactories[versionedTopic] = factory;
             this.consoleLog.print(
-                `new factory registered for topic "${versionedTopic}"`
+                `new factory registered for topic "${versionedTopic}"`,
             );
         }
     }
@@ -223,7 +232,7 @@ export default class TaskRunner {
         const factory = this.versionedTopicFactories[versionedTopic];
         if (!factory)
             throw new Error(
-                `no factory registered for topic "${versionedTopic}"`
+                `no factory registered for topic "${versionedTopic}"`,
             );
         return factory;
     }
@@ -231,7 +240,7 @@ export default class TaskRunner {
     async lockTask(doc: ITaskDoc) {
         if (doc.worker) {
             this.consoleLog.warn(
-                `task ${doc.id} already locked at ${doc.worker}, not locking it again`
+                `task ${doc.id} already locked at ${doc.worker}, not locking it again`,
             );
             return false;
         }
@@ -244,7 +253,7 @@ export default class TaskRunner {
             if (!newDoc || newDoc.worker !== this.instance) {
                 if (newDoc) doc.worker = newDoc.worker;
                 this.consoleLog.warn(
-                    `task ${doc.id} already locked at ${doc.worker}, not locking it again`
+                    `task ${doc.id} already locked at ${doc.worker}, not locking it again`,
                 );
                 return false;
             }
@@ -267,7 +276,7 @@ export default class TaskRunner {
             return;
         }
 
-        this._runningTasks[task.id] = taskCouple
+        this._runningTasks[task.id] = taskCouple;
         task.consoleLog.generalOptions.verbosity =
             this.consoleLog.generalOptions.verbosity;
 
@@ -305,7 +314,12 @@ export default class TaskRunner {
         task.on('updated', updater);
         if (this.io) task.on('progress', emitProgress);
 
-        await task.run();
+        let exception = undefined as unknown;
+        try {
+            await task.run();
+        } catch (e) {
+            exception = e;
+        }
 
         task.off('updated', updater);
         if (this.io) task.off('progress', emitProgress);
@@ -316,6 +330,7 @@ export default class TaskRunner {
         this.consoleLog.debug(JSON.stringify(doc.toPersistedWithId()));
         await doc.save();
         delete this._runningTasks[task.id];
+        if (exception !== undefined) throw exception;
     }
 
     async loadTasks(tasksToLoad: number) {
@@ -344,20 +359,49 @@ export default class TaskRunner {
         }
         const tasksToStart = this.maxRunningTasks - this.numOfRunningTasks;
         this.consoleLog.debug(
-            `running tasks ${this.numOfRunningTasks}/${this.maxRunningTasks}`
+            `running tasks ${this.numOfRunningTasks}/${this.maxRunningTasks}`,
         );
         if (tasksToStart <= 0) return;
 
         const numOfFactories = Object.values(
-            this.versionedTopicFactories
+            this.versionedTopicFactories,
         ).length;
         if (numOfFactories === 0)
             this.consoleLog.warn(
-                'no factory registered, likely no task will be run'
+                'no factory registered, likely no task will be run',
             );
 
-        const couples = await this.loadTasks(tasksToStart);
-        couples.map((couple) => this.runTask(couple));
+        try {
+            const couples = await this.loadTasks(tasksToStart);
+            const couplesWithExceptions = [] as {
+                couple: TaskCouple;
+                exception: unknown;
+            }[];
+            await Promise.all(
+                couples.map((couple) =>
+                    this.runTask(couple).catch((e) =>
+                        couplesWithExceptions.push({
+                            couple: couple,
+                            exception: e,
+                        }),
+                    ),
+                ),
+            );
+
+            // check if all tasks are removed from runningTasks
+            if (couplesWithExceptions.length > 0) {
+                for (const el of couplesWithExceptions) {
+                    const couple = el.couple;
+                    delete this._runningTasks[couple.task.id];
+                }
+                throw couplesWithExceptions[0].exception;
+            }
+        } catch (e) {
+            // verify there aren't any running tasks before sending the expection
+            await this.stop();
+            this._active = true;
+            throw e;
+        }
     }
 
     async setCronTasks() {
@@ -386,14 +430,13 @@ export default class TaskRunner {
         for (const doc of docs) delete factoryMap[doc.versionedTopic];
         for (const topic in factoryMap) {
             const factory = factoryMap[topic];
-            const cronPersistedTasks = await factory.createCronPersistedTasks(
-                topic
-            );
+            const cronPersistedTasks =
+                await factory.createCronPersistedTasks(topic);
             Promise.all(
                 cronPersistedTasks.map((cronPersistedTask) => {
                     const doc = new this.Model(cronPersistedTask);
                     return doc.save();
-                })
+                }),
             );
         }
     }
@@ -407,7 +450,7 @@ export default class TaskRunner {
     async taskRecovery() {
         const old = Cron.comeBackIn(-this.taskRecoverySecondsInThePast * 1000);
         const topicsOfFactoriesWithRecoverMethod = _.toPairs(
-            this.versionedTopicFactories
+            this.versionedTopicFactories,
         )
             .filter((pair) => !!pair[1].recover)
             .map((pair) => pair[0]);
@@ -417,14 +460,14 @@ export default class TaskRunner {
             updatedAt: { $lt: old },
         });
         this.consoleLog.debug(
-            `found ${list.length} tasks that can be recovered`
+            `found ${list.length} tasks that can be recovered`,
         );
         return Promise.all(
             list.map(async (doc) => {
                 const factory =
                     this.versionedTopicFactories[doc.versionedTopic];
                 return factory.recover!(doc);
-            })
+            }),
         );
     }
 
@@ -436,9 +479,9 @@ export default class TaskRunner {
                     this.deletePersistedTasksMarked(),
                     this.setCronTasks(),
                     this.taskRecovery(),
-                ])}
-            )
-        ])    
+                ]);
+            }),
+        ]);
     }
 
     async setIo(options: InputTaskRunnerIo) {
@@ -482,12 +525,12 @@ export default class TaskRunner {
                             persistedData.versionedTopic = 'default#1';
                         this.consoleLog.debug(
                             `adding new task from client: ${JSON.stringify(
-                                persistedData
-                            )}`
+                                persistedData,
+                            )}`,
                         );
                         const doc =
                             await this.addTaskFromClientAddressableAttributes(
-                                persistedData
+                                persistedData,
                             );
                         if (typeof doc === 'string') callback(doc);
                         else callback(doc.toPersistedWithId());
@@ -496,7 +539,7 @@ export default class TaskRunner {
                         this.consoleLog.error(err);
                         callback(err);
                     }
-                }
+                },
             );
 
             socket.on('remove', async (idObj: { id: string }, callback) => {
@@ -520,7 +563,7 @@ export default class TaskRunner {
                     }
                     await doc.deleteOne();
                     this.consoleLog.debug(
-                        `client asked to remove task: ${JSON.stringify(idObj)}`
+                        `client asked to remove task: ${JSON.stringify(idObj)}`,
                     );
                     callback();
                 } catch (e) {
@@ -536,7 +579,7 @@ export default class TaskRunner {
                     const mongoDoc2PersistedWithId = function (
                         doc: SerializedTask & {
                             _id: any;
-                        }
+                        },
                     ) {
                         const changeMongooseDoc = new Model(doc);
                         return changeMongooseDoc.toPersistedWithId();
@@ -553,7 +596,7 @@ export default class TaskRunner {
                     try {
                         const docs = await this.io!.realtimeQuery._find(params);
                         result.list = docs.map((doc) =>
-                            mongoDoc2PersistedWithId(doc)
+                            mongoDoc2PersistedWithId(doc),
                         );
                         const subscriptionId = realtimeQuery.subscribe(
                             params,
@@ -568,17 +611,17 @@ export default class TaskRunner {
                                     if (changeList.doc)
                                         changeObj.doc =
                                             mongoDoc2PersistedWithId(
-                                                changeList.doc
+                                                changeList.doc,
                                             );
                                     socket.emit('change', changeObj);
                                 } else
                                     socket.emit(
                                         'list',
                                         list.map((doc) =>
-                                            mongoDoc2PersistedWithId(doc)
-                                        )
+                                            mongoDoc2PersistedWithId(doc),
+                                        ),
                                     );
-                            }
+                            },
                         );
 
                         if (!querySubscriptionsBySocket[socket.id])
@@ -587,12 +630,12 @@ export default class TaskRunner {
                             ];
                         else
                             querySubscriptionsBySocket[socket.id].push(
-                                subscriptionId
+                                subscriptionId,
                             );
                         this.consoleLog.debug(
                             `subscribed query (id: ${subscriptionId}): ${JSON.stringify(
-                                params
-                            )}`
+                                params,
+                            )}`,
                         );
                         result.subscriptionId = subscriptionId;
                         callback(result);
@@ -601,7 +644,7 @@ export default class TaskRunner {
                         result.error = e;
                         callback(result);
                     }
-                }
+                },
             );
 
             io.realtimeQuery.start();
@@ -610,7 +653,7 @@ export default class TaskRunner {
 
     static getModelFromParams(
         conn: Connection | typeof mongoose,
-        collectionName = 'tasks'
+        collectionName = 'tasks',
     ) {
         if (conn.models[collectionName])
             return conn.models[collectionName] as ITaskModel;
