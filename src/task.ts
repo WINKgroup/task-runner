@@ -10,6 +10,7 @@ import {
     TaskActions,
 } from './common';
 import { EventEmitter } from 'node:events';
+import { getErrorStrOnException } from '@winkgroup/misc';
 
 export default abstract class Task extends EventEmitter {
     readonly id: string;
@@ -88,7 +89,8 @@ export default abstract class Task extends EventEmitter {
                     this.emit('updated');
                 } catch (e) {
                     if (this._state === 'running') this._state = 'to do';
-                    this.setErrorOnException(e);
+                    const error = getErrorStrOnException(e);
+                    this._response = e;
                     this.emit('updated');
                     throw e;
                 }
@@ -188,10 +190,6 @@ export default abstract class Task extends EventEmitter {
 
             this.on('updated', resolver);
         });
-    }
-
-    protected setErrorOnException(e: unknown) {
-        this._response = e;
     }
 
     protected static _serializeAny(obj?: any) {

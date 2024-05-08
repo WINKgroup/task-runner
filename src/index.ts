@@ -135,14 +135,8 @@ export default class TaskRunner {
         return factory.unpersist(persistedTask);
     }
 
-    async getPersistedTaskById(id: string) {
-        const doc = await this.Model.findById(id);
-        if (!doc) return null;
-        return doc.toPersistedWithId();
-    }
-
     async getTaskById(id: string) {
-        const persistedTask = await this.getPersistedTaskById(id);
+        const persistedTask = await this.Model.getPersistedTaskById(id);
         if (!persistedTask) return persistedTask;
         return this.unpersistTask(persistedTask);
     }
@@ -396,7 +390,7 @@ export default class TaskRunner {
             }
         } catch (e) {
             // verify there aren't any running tasks before sending the expection
-            const previousActiveState = this._active
+            const previousActiveState = this._active;
             await this.stop();
             this._active = previousActiveState;
             throw e;
@@ -447,27 +441,37 @@ export default class TaskRunner {
     }
 
     async taskRecovery() {
+        const now = new Date().toISOString();
         const old = Cron.comeBackIn(-this.taskRecoverySecondsInThePast * 1000);
         const topicsOfFactoriesWithRecoverMethod = _.toPairs(
             this.versionedTopicFactories,
         )
             .filter((pair) => !!pair[1].recover)
             .map((pair) => pair[0]);
-        if (topicsOfFactoriesWithRecoverMethod.length === 0) return;
+        if (topicsOfFactoriesWithRecoverMethod.length === 0) return {};
         const list = await this.Model.find({
             versionedTopic: { $in: topicsOfFactoriesWithRecoverMethod },
+            $or: [
+                { waitUntil: { $exists: false } },
+                { waitUntil: { $lte: now } },
+            ],
             updatedAt: { $lt: old },
         });
         this.consoleLog.debug(
             `found ${list.length} tasks that can be recovered`,
         );
-        return Promise.all(
+
+        const result = {} as { [taskId: string]: boolean };
+
+        await Promise.all(
             list.map(async (doc) => {
                 const factory =
                     this.versionedTopicFactories[doc.versionedTopic];
-                return factory.recover!(doc);
+                result[doc._id.toString()] = await factory.recover!(doc);
             }),
         );
+
+        return result;
     }
 
     cron() {
@@ -481,6 +485,16 @@ export default class TaskRunner {
                 ]);
             }),
         ]);
+    }
+
+    static getModelFromParams(
+        conn: Connection | typeof mongoose,
+        collectionName = 'tasks',
+    ) {
+        if (conn.models[collectionName])
+            return conn.models[collectionName] as TaskModel;
+
+        return conn.model<TaskDoc, TaskModel>(collectionName, schema);
     }
 
     async setIo(options: InputTaskRunnerIo) {
@@ -648,16 +662,6 @@ export default class TaskRunner {
 
             io.realtimeQuery.start();
         });
-    }
-
-    static getModelFromParams(
-        conn: Connection | typeof mongoose,
-        collectionName = 'tasks',
-    ) {
-        if (conn.models[collectionName])
-            return conn.models[collectionName] as TaskModel;
-
-        return conn.model<TaskDoc, TaskModel>(collectionName, schema);
     }
 }
 

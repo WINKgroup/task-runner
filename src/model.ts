@@ -5,12 +5,15 @@ export interface ITaskMethods {
     title(): string;
     toPersistedWithId(): PersistedTaskWithId;
     updateData(data: Partial<PersistedTaskWithId>): void;
+    restart(): void;
 }
 
 export type TaskDoc = HydratedDocument<IPersistedTask, ITaskMethods>;
 
 export interface TaskModel extends Model<IPersistedTask, {}, ITaskMethods> {
+    getPersistedTaskById(id: string): Promise<PersistedTaskWithId | null>;
     createEmpty(versionedTopic?: string): TaskDoc;
+    restart(): void;
 }
 
 export const schema = new mongoose.Schema<TaskDoc, TaskModel>({
@@ -61,6 +64,14 @@ schema.method('updateData', function (data: Partial<PersistedTaskWithId>) {
     }
 });
 
+schema.method('restart', function () {
+    const doc = this as TaskDoc;
+    doc.updatedAt = new Date().toISOString();
+    doc.response = undefined;
+    doc.worker = undefined;
+    doc.state = 'to do';
+});
+
 schema.static('createEmpty', function (versionedTopic = 'default#1') {
     const Model = this as TaskModel;
 
@@ -69,4 +80,12 @@ schema.static('createEmpty', function (versionedTopic = 'default#1') {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
     });
+});
+
+schema.static('getPersistedTaskById', async function (id: string) {
+    const Model = this as TaskModel;
+
+    const doc = await Model.findById(id);
+    if (!doc) return null;
+    return doc.toPersistedWithId();
 });

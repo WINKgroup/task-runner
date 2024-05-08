@@ -49,3 +49,15 @@ export interface IPersistedTask
 export interface PersistedTaskWithId extends IPersistedTask {
     id: string;
 }
+
+export interface TaskResponseError {
+    state: 'error';
+    error: string;
+}
+
+export interface TaskResponseSuccess<T> {
+    state: 'success';
+    result: T;
+}
+
+export type TaskResponse<T> = TaskResponseSuccess<T> | TaskResponseError;
