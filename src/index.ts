@@ -320,6 +320,7 @@ export default class TaskRunner {
         doc.worker = undefined;
         doc.publicUrl = undefined;
         this.consoleLog.debug(JSON.stringify(doc.toPersistedWithId()));
+        doc.markModified('state') // for some reason state, in some cases is not considered modified
         await doc.save();
         delete this._runningTasks[task.id];
         if (exception !== undefined) throw exception;
