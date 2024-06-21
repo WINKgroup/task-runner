@@ -686,7 +686,6 @@ export function waitForTask(input: WaitForTaskInput) {
                             'completed'
                     ) {
                         const Model = input.runnerModel;
-                        console.log('dai dai');
                         const doc = await Model.findById(id);
                         if (!doc) throw new Error('unable to find document');
                         resolve(doc);
