@@ -3,23 +3,23 @@ import Cron from '@winkgroup/cron';
 import MongoHelper, { QueryParams, RealtimeQuery } from '@winkgroup/db-mongo';
 import { ChangeQueryDocumentList } from '@winkgroup/db-mongo/dist/queryCache';
 import _ from 'lodash';
-import { Namespace, Server as IoServer } from 'socket.io';
+import mongoose, { Connection, ObjectId } from 'mongoose';
+import { Server as IoServer, Namespace } from 'socket.io';
 import {
-    clientAddressableAttributes,
-    InputTask,
     IPersistedTask,
     IPersistedTaskSpecificAttributes,
+    InputTask,
     PersistedTaskWithId,
     SerializedTask,
     TaskActionAvailability,
     TaskActions,
     TaskResponse,
     TaskSignal,
+    clientAddressableAttributes,
 } from './common';
 import TaskFactory from './factory';
 import { TaskDoc, TaskModel, schema } from './model';
 import Task from './task';
-import mongoose, { Connection } from 'mongoose';
 
 export interface InputTaskRunnerIo {
     publicUrl: string;
@@ -667,20 +667,53 @@ export default class TaskRunner {
     }
 }
 
+export interface WaitForTaskInput {
+    runnerModel: TaskModel;
+    taskId: string;
+}
+
+export function waitForTask(input: WaitForTaskInput) {
+    return new Promise<TaskDoc>((resolve) => {
+        const watch = input.runnerModel.watch();
+        watch.on('change', async (data) => {
+            try {
+                if (data.operationType === 'update') {
+                    const id = data.documentKey._id.toString();
+                    if (
+                        data.updateDescription &&
+                        data.updateDescription.updatedFields &&
+                        data.updateDescription.updatedFields.state ===
+                            'completed'
+                    ) {
+                        const Model = input.runnerModel;
+                        console.log('dai dai');
+                        const doc = await Model.findById(id);
+                        if (!doc) throw new Error('unable to find document');
+                        resolve(doc);
+                        watch.close();
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        });
+    });
+}
+
 export {
-    TaskFactory,
-    TaskDoc,
-    TaskModel,
-    Task,
-    clientAddressableAttributes,
-    TaskSignal,
-    TaskActions,
-    TaskActionAvailability,
-    SerializedTask,
+    IPersistedTask,
     IPersistedTaskSpecificAttributes,
     InputTask,
-    IPersistedTask,
     PersistedTaskWithId,
-    schema,
+    SerializedTask,
+    Task,
+    TaskActionAvailability,
+    TaskActions,
+    TaskDoc,
+    TaskFactory,
+    TaskModel,
     TaskResponse,
+    TaskSignal,
+    clientAddressableAttributes,
+    schema,
 };

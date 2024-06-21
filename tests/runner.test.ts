@@ -1,7 +1,9 @@
 import { ConsoleLogLevel } from '@winkgroup/console-log';
 import TaskThrowing, { TaskFactoryThrowing } from '../playground/throwingTask';
-import TaskRunner from '../src/index';
+import TaskRunner, { waitForTask } from '../src/index';
 import TestConfig from './config';
+import TaskTimeout, { TaskFactoryTimeout } from '../playground/timeoutTask';
+import { waitForMs } from '@winkgroup/cron';
 
 const config = new TestConfig();
 
@@ -33,6 +35,33 @@ test("throwing task doesn't break runner", (completed) => {
         }
         await runner.cron().catch(() => ++errors);
     }, 300);
+}, 20000);
+
+test('waitForTask', async () => {
+    const Model = TaskRunner.getModelFromParams(config.conn, 'waitForTask');
+    const runner = new TaskRunner({
+        Model,
+        instance: 'waitForTask runner',
+        versionedTopicFactories: { 'dummy#1': new TaskFactoryTimeout() },
+    });
+    runner.consoleLog.generalOptions.verbosity = ConsoleLogLevel.DEBUG;
+    const task = new TaskTimeout({ versionedTopic: 'dummy#1', data: 5000 });
+    const taskData = task.dataToPersist();
+    const doc = new Model(taskData);
+    await doc.save();
+
+    const interval = setInterval(async () => {
+        await runner.cron();
+    }, 2000);
+
+    const completedTask = await waitForTask({
+        taskId: doc._id.toString(),
+        runnerModel: Model,
+    });
+
+    expect(completedTask.state).toBe('completed');
+    clearInterval(interval);
+    await waitForMs(2000);
 }, 20000);
 
 afterAll(async () => {
