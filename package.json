@@ -1,6 +1,6 @@
 {
   "name": "@winkgroup/task-runner",
-  "version": "4.2.7",
+  "version": "4.2.8",
   "description": "task runner on NodeJS and Mongo",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
