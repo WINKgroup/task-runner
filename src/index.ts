@@ -673,7 +673,23 @@ export interface WaitForTaskInput {
 }
 
 export function waitForTask(input: WaitForTaskInput) {
-    return new Promise<TaskDoc>((resolve) => {
+    return new Promise<TaskDoc>(async (resolve, reject) => {
+        const isFinalized = async () => {
+            const Model = input.runnerModel;
+            const doc = await Model.findOne({ _id: input.taskId });
+            if (!doc) {
+                reject('document not found');
+                return true;
+            }
+            if (doc.state === 'completed') {
+                resolve(doc);
+                return true;
+            }
+            return false;
+        };
+
+        const finalized = await isFinalized();
+        if (finalized) return;
         const watch = input.runnerModel.watch();
         watch.on('change', async (data) => {
             try {
@@ -682,15 +698,13 @@ export function waitForTask(input: WaitForTaskInput) {
                     if (
                         data.updateDescription &&
                         data.updateDescription.updatedFields &&
-                        id === input.taskId &&
-                        data.updateDescription.updatedFields.state ===
-                            'completed'
+                        id === input.taskId
                     ) {
-                        const Model = input.runnerModel;
-                        const doc = await Model.findById(id);
-                        if (!doc) throw new Error('unable to find document');
-                        resolve(doc);
-                        watch.close();
+                        const finalized = await isFinalized();
+                        if (finalized) {
+                            watch.close();
+                            return;
+                        }
                     }
                 }
             } catch (e) {
