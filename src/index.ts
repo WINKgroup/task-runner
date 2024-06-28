@@ -682,6 +682,7 @@ export function waitForTask(input: WaitForTaskInput) {
                     if (
                         data.updateDescription &&
                         data.updateDescription.updatedFields &&
+                        id === input.taskId &&
                         data.updateDescription.updatedFields.state ===
                             'completed'
                     ) {
