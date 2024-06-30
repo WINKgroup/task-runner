@@ -1,6 +1,6 @@
 {
   "name": "@winkgroup/task-runner",
-  "version": "4.2.9",
+  "version": "4.2.10",
   "description": "task runner on NodeJS and Mongo",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,6 +13,7 @@
     "build": "npm run clean && tsc",
     "prepare": "npm run build",
     "playground": "ts-node-dev playground/server.ts",
+    "src-test": "ts-node src/test.ts",
     "format": "prettier --write 'src/**/*.ts' 'playground/**/*.ts' 'tests/**/*.ts'",
     "postversion": "git push && git push --tags && npm publish"
   },

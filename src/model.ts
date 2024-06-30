@@ -42,11 +42,13 @@ export const schema = new mongoose.Schema<TaskDoc, TaskModel>({
 
 schema.method('toPersistedWithId', function () {
     const doc = this as TaskDoc;
-    const obj: PersistedTaskWithId = doc.toObject({
+    const obj:any = doc.toObject({
+        virtuals: true,
         versionKey: false,
         flattenObjectIds: true,
     });
-    return obj;
+    delete obj._id
+    return obj as PersistedTaskWithId;
 });
 
 schema.method('title', async function () {
